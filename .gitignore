@@ -1,0 +1,27 @@
+# Rust build artifacts
+target/
+**/target/
+**/*.rs.bk
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# Environment variables (secrets)
+.env
+.env.*
+!.env.example
+
+# Frontend build artifacts (Trunk/Wasm)
+dist/
+**/dist/
+pkg/
+**/pkg/
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*~

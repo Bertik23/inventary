@@ -1,0 +1,10 @@
+[print_schema]
+file = "src/schema.rs"
+custom_type_derives = ["diesel::query_builder::QueryId"]
+
+[migrations_directory]
+dir = "migrations"
+
+# Default database URL (can be overridden by DATABASE_URL env var)
+# For SQLite, use just the file path
+# For PostgreSQL, use: postgres://user:password@localhost/dbname

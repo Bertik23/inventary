@@ -1,0 +1,12 @@
+-- PostgreSQL version
+CREATE TABLE IF NOT EXISTS inventory_items (
+    id TEXT PRIMARY KEY NOT NULL,
+    barcode TEXT,
+    name TEXT NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    product_data TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_barcode ON inventory_items(barcode);
