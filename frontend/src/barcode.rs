@@ -109,22 +109,22 @@ pub fn barcode_scanner(props: &Props) -> Html {
     }
     
     html! {
-        <div class="barcode-scanner-view">
+        <div class="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
             <video
                 ref={video_ref}
                 autoplay=true
                 playsinline=true
                 muted=true
-                class="scanner-video"
+                class="absolute inset-0 w-full h-full object-cover"
             />
             <canvas ref={canvas_ref} style="display: none;"></canvas>
             {if let Some(ref err) = *error {
                 html! {
-                    <div class="error">{err}</div>
+                    <div class="absolute inset-0 flex items-center justify-center bg-black/80 text-white p-4 text-center z-10">{err}</div>
                 }
             } else {
                 html! {
-                    <p>{"Point camera at barcode"}</p>
+                    <div class="absolute bottom-4 left-0 right-0 text-center text-white/90 text-sm bg-black/40 py-2 backdrop-blur-sm z-10">{"Point camera at barcode"}</div>
                 }
             }}
         </div>
