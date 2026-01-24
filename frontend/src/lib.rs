@@ -2,6 +2,7 @@ mod app;
 mod components;
 mod api;
 mod barcode;
+mod router;
 
 use wasm_bindgen::prelude::*;
 

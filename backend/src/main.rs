@@ -50,6 +50,10 @@ async fn main() -> std::io::Result<()> {
                 .service(handlers::search_inventory)
                 .service(handlers::search_product)
                 .service(handlers::get_item_by_barcode)
+                .service(handlers::register_user)
+                .service(handlers::login_user)
+                .service(handlers::create_inventory)
+                .service(handlers::get_user_inventories)
         })
         .bind("127.0.0.1:8080")?
         .run()

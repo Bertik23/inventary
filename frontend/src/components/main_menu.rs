@@ -1,36 +1,35 @@
+use crate::router::Route;
 use yew::prelude::*;
-use crate::app::AppPage;
+use yew_router::prelude::*;
 
 #[derive(Properties, PartialEq)]
-pub struct Props {
-    pub navigate: Callback<AppPage>,
-}
+pub struct Props {}
 
 #[function_component(MainMenu)]
-pub fn main_menu(props: &Props) -> Html {
-    let navigate = props.navigate.clone();
-    
+pub fn main_menu(_props: &Props) -> Html {
+    let navigator = use_navigator().unwrap();
+
     let on_add_click = {
-        let navigate = navigate.clone();
+        let navigator = navigator.clone();
         Callback::from(move |_| {
-            navigate.emit(AppPage::AddItem);
+            navigator.push(&Route::Add);
         })
     };
-    
+
     let on_remove_click = {
-        let navigate = navigate.clone();
+        let navigator = navigator.clone();
         Callback::from(move |_| {
-            navigate.emit(AppPage::RemoveItem);
+            navigator.push(&Route::Remove);
         })
     };
-    
+
     let on_show_inventory_click = {
-        let navigate = navigate.clone();
+        let navigator = navigator.clone();
         Callback::from(move |_| {
-            navigate.emit(AppPage::InventoryList);
+            navigator.push(&Route::Inventory);
         })
     };
-    
+
     html! {
         <div class="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
             <div class="w-full max-w-md space-y-8">
@@ -40,12 +39,12 @@ pub fn main_menu(props: &Props) -> Html {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                         </svg>
                     </div>
-                    <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">{"Inventary"}</h1>
+                    <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">{"Inventary!"}</h1>
                     <p class="mt-2 text-gray-500">{"Manage your stock with ease"}</p>
                 </div>
 
                 <div class="space-y-4">
-                    <button 
+                    <button
                         onclick={on_add_click}
                         class="w-full group relative flex items-center p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-blue-300 transition-all duration-200 text-left"
                     >
@@ -60,7 +59,7 @@ pub fn main_menu(props: &Props) -> Html {
                         </div>
                     </button>
 
-                    <button 
+                    <button
                         onclick={on_remove_click}
                         class="w-full group relative flex items-center p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-red-300 transition-all duration-200 text-left"
                     >
@@ -75,7 +74,7 @@ pub fn main_menu(props: &Props) -> Html {
                         </div>
                     </button>
 
-                    <button 
+                    <button
                         onclick={on_show_inventory_click}
                         class="w-full group relative flex items-center p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-indigo-300 transition-all duration-200 text-left"
                     >
@@ -90,7 +89,7 @@ pub fn main_menu(props: &Props) -> Html {
                         </div>
                     </button>
                 </div>
-                
+
                 <div class="text-center pt-8">
                     <p class="text-xs text-gray-400">{"© 2024 Inventary App"}</p>
                 </div>

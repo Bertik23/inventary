@@ -8,6 +8,7 @@ const API_BASE: &str = "http://127.0.0.1:8080/api";
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct InventoryItem {
     pub id: String,
+    pub inventory_id: String,
     pub barcode: Option<String>,
     pub name: String,
     pub quantity: i32,
@@ -18,6 +19,7 @@ pub struct InventoryItem {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AddItemRequest {
+    pub inventory_id: String,
     pub barcode: Option<String>,
     pub name: Option<String>,
     pub quantity: Option<i32>,
@@ -25,6 +27,7 @@ pub struct AddItemRequest {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RemoveItemRequest {
+    pub inventory_id: String,
     pub barcode: Option<String>,
     pub id: Option<String>,
     pub quantity: Option<i32>,
@@ -39,8 +42,33 @@ pub struct ProductInfo {
     pub categories: Vec<String>,
 }
 
-pub async fn fetch_inventory() -> Result<Vec<InventoryItem>, String> {
-    let url = format!("{}/inventory", API_BASE);
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct User {
+    pub id: String,
+    pub username: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Inventory {
+    pub id: String,
+    pub name: String,
+    pub owner_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AuthRequest {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CreateInventoryRequest {
+    pub name: String,
+    pub owner_id: String,
+}
+
+pub async fn fetch_inventory(inventory_id: &str) -> Result<Vec<InventoryItem>, String> {
+    let url = format!("{}/inventory?inventory_id={}", API_BASE, inventory_id);
     fetch_json(&url, None::<&()>).await
 }
 
@@ -59,8 +87,8 @@ pub async fn search_products(query: &str) -> Result<Vec<ProductInfo>, String> {
     fetch_json(&url, None::<&()>).await
 }
 
-pub async fn search_inventory_items(query: &str) -> Result<Vec<ProductInfo>, String> {
-    let url = format!("{}/inventory/search?q={}", API_BASE, urlencoding::encode(query));
+pub async fn search_inventory_items(query: &str, inventory_id: &str) -> Result<Vec<ProductInfo>, String> {
+    let url = format!("{}/inventory/search?q={}&inventory_id={}", API_BASE, urlencoding::encode(query), inventory_id);
     fetch_json(&url, None::<&()>).await
 }
 
@@ -69,11 +97,31 @@ pub async fn get_product_by_barcode(barcode: &str) -> Result<ProductInfo, String
     fetch_json(&url, None::<&()>).await
 }
 
+pub async fn login_user(req: AuthRequest) -> Result<User, String> {
+    let url = format!("{}/users/login", API_BASE);
+    fetch_json(&url, Some(&req)).await
+}
+
+pub async fn register_user(req: AuthRequest) -> Result<User, String> {
+    let url = format!("{}/users/register", API_BASE);
+    fetch_json(&url, Some(&req)).await
+}
+
+pub async fn get_user_inventories(user_id: &str) -> Result<Vec<Inventory>, String> {
+    let url = format!("{}/users/{}/inventories", API_BASE, user_id);
+    fetch_json(&url, None::<&()>).await
+}
+
+pub async fn create_inventory(req: CreateInventoryRequest) -> Result<Inventory, String> {
+    let url = format!("{}/inventories", API_BASE);
+    fetch_json(&url, Some(&req)).await
+}
+
 async fn fetch_json<T: Serialize, R: for<'de> Deserialize<'de>>(
     url: &str,
     body: Option<&T>,
 ) -> Result<R, String> {
-    let mut opts = RequestInit::new();
+    let opts = RequestInit::new();
     opts.set_method("GET");
     opts.set_mode(RequestMode::Cors);
     

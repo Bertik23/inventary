@@ -1,12 +1,13 @@
 use yew::prelude::*;
-use crate::app::AppPage;
+use yew_router::prelude::*;
+use crate::router::Route;
 use crate::api::{add_item, remove_item, search_products, search_inventory_items, get_product_by_barcode, AddItemRequest, RemoveItemRequest, ProductInfo};
 use crate::barcode::BarcodeScanner as BarcodeScannerImpl;
+use crate::app::InventoryContext;
 
 #[derive(Properties, PartialEq)]
 pub struct Props {
     pub mode: String,
-    pub navigate: Callback<AppPage>,
 }
 
 #[function_component(BarcodeScanner)]
@@ -20,11 +21,20 @@ pub fn barcode_scanner(props: &Props) -> Html {
     let loading = use_state(|| false);
     let message = use_state(|| Option::<String>::None);
     
-    let navigate = props.navigate.clone();
+    let inventory_context = use_context::<InventoryContext>().expect("InventoryContext not found");
+    let navigator = use_navigator().unwrap();
+
+    let inventory_id = match &*inventory_context.inventory_id {
+        Some(id) => id.clone(),
+        None => {
+            return html! { <div>{"No inventory selected"}</div> };
+        }
+    };
+    
     let on_back = {
-        let navigate = navigate.clone();
+        let navigator = navigator.clone();
         Callback::from(move |_| {
-            navigate.emit(AppPage::MainMenu);
+            navigator.push(&Route::MainMenu);
         })
     };
     
@@ -33,6 +43,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
         let results = search_results.clone();
         let loading = loading.clone();
         let mode = props.mode.clone();
+        let inventory_id = inventory_id.clone();
         
         Callback::from(move |_: ()| {
             let query = query.clone();
@@ -45,11 +56,12 @@ pub fn barcode_scanner(props: &Props) -> Html {
             }
             
             let query_str = (*query).clone();
+            let inventory_id = inventory_id.clone();
             
             loading.set(true);
             wasm_bindgen_futures::spawn_local(async move {
                 let result = if mode == "remove" {
-                    search_inventory_items(&query_str).await
+                    search_inventory_items(&query_str, &inventory_id).await
                 } else {
                     search_products(&query_str).await
                 };
@@ -89,16 +101,18 @@ pub fn barcode_scanner(props: &Props) -> Html {
         let quantity = quantity.clone();
         let loading = loading.clone();
         let message = message.clone();
-        let navigate = navigate.clone();
+        let navigator = navigator.clone();
         let mode = props.mode.clone();
+        let inventory_id = inventory_id.clone();
         
         Callback::from({
             let selected = selected.clone();
             let quantity = quantity.clone();
             let loading = loading.clone();
             let message = message.clone();
-            let navigate = navigate.clone();
+            let navigator = navigator.clone();
             let mode = mode.clone();
+            let inventory_id = inventory_id.clone();
             move |_| {
                 let product = match selected.as_ref() {
                     Some(p) => p.clone(),
@@ -110,20 +124,23 @@ pub fn barcode_scanner(props: &Props) -> Html {
                 
                 loading.set(true);
                 let mode = mode.clone();
-                let navigate = navigate.clone();
+                let navigator = navigator.clone();
                 let message = message.clone();
                 let loading = loading.clone();
                 let qty = *quantity;
+                let inventory_id = inventory_id.clone();
                 
                 wasm_bindgen_futures::spawn_local(async move {
                     let result = if mode == "add" {
                         add_item(AddItemRequest {
+                            inventory_id: inventory_id,
                             barcode: product.barcode.clone(),
                             name: Some(product.name.clone()),
                             quantity: Some(qty),
                         }).await
                     } else {
                         remove_item(RemoveItemRequest {
+                            inventory_id: inventory_id,
                             barcode: product.barcode.clone(),
                             id: None,
                             quantity: Some(qty),
@@ -139,10 +156,10 @@ pub fn barcode_scanner(props: &Props) -> Html {
                                 "Item removed successfully!".to_string()
                             }));
                             // Navigate back after a delay
-                            let navigate = navigate.clone();
+                            let navigator = navigator.clone();
                             wasm_bindgen_futures::spawn_local(async move {
                                 gloo_timers::future::TimeoutFuture::new(1500).await;
-                                navigate.emit(AppPage::MainMenu);
+                                navigator.push(&Route::MainMenu);
                             });
                         }
                         Err(e) => {

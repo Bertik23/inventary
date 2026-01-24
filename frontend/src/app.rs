@@ -1,41 +1,33 @@
 use yew::prelude::*;
-use crate::components::{MainMenu, InventoryList, BarcodeScanner};
+use yew_router::prelude::*;
+use crate::router::{switch, Route};
+use crate::api::User;
 
 #[derive(Clone, PartialEq)]
-pub enum AppPage {
-    MainMenu,
-    InventoryList,
-    AddItem,
-    RemoveItem,
+pub struct UserContext {
+    pub user: UseStateHandle<Option<User>>,
+}
+
+#[derive(Clone, PartialEq)]
+pub struct InventoryContext {
+    pub inventory_id: UseStateHandle<Option<String>>,
 }
 
 #[function_component(App)]
 pub fn app() -> Html {
-    let page = use_state(|| AppPage::MainMenu);
-    
-    let navigate = {
-        let page = page.clone();
-        Callback::from(move |new_page: AppPage| {
-            page.set(new_page);
-        })
-    };
-    
+    let user = use_state(|| Option::<User>::None);
+    let inventory_id = use_state(|| Option::<String>::None);
+
+    let user_context = UserContext { user };
+    let inventory_context = InventoryContext { inventory_id };
+
     html! {
-        <div class="app">
-            {match *page {
-                AppPage::MainMenu => html! {
-                    <MainMenu {navigate} />
-                },
-                AppPage::InventoryList => html! {
-                    <InventoryList {navigate} />
-                },
-                AppPage::AddItem => html! {
-                    <BarcodeScanner mode="add" {navigate} />
-                },
-                AppPage::RemoveItem => html! {
-                    <BarcodeScanner mode="remove" {navigate} />
-                },
-            }}
-        </div>
+        <ContextProvider<UserContext> context={user_context}>
+            <ContextProvider<InventoryContext> context={inventory_context}>
+                <BrowserRouter>
+                    <Switch<Route> render={switch} />
+                </BrowserRouter>
+            </ContextProvider<InventoryContext>>
+        </ContextProvider<UserContext>>
     }
 }

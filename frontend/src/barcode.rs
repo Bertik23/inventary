@@ -1,7 +1,7 @@
 use yew::prelude::*;
 use wasm_bindgen::{prelude::*, JsCast};
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{HtmlVideoElement, MediaStream, MediaStreamTrack, MediaStreamConstraints, MediaTrackConstraints, Navigator, MediaDevices, HtmlCanvasElement, CanvasRenderingContext2d};
+use web_sys::{HtmlVideoElement, MediaStream, MediaStreamTrack, MediaStreamConstraints, HtmlCanvasElement, CanvasRenderingContext2d};
 use js_sys::{Reflect, Function};
 
 #[derive(Properties, PartialEq)]
@@ -58,7 +58,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
                     Reflect::set(&video_constraints, &JsValue::from_str("facingMode"), &JsValue::from_str("environment")).unwrap();
                     
                     let mut constraints = MediaStreamConstraints::new();
-                    constraints.video(&JsValue::from(&video_constraints));
+                    constraints.set_video(&JsValue::from(&video_constraints));
                     
                     match media_devices.get_user_media_with_constraints(&constraints) {
                         Ok(stream_promise) => {

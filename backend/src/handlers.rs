@@ -11,10 +11,16 @@ use serde_json;
 #[actix_web::get("/api/inventory")]
 pub async fn show_inventory(
     pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
 ) -> Result<HttpResponse> {
+    let inventory_id_param = query.get("inventory_id")
+        .ok_or_else(|| actix_web::error::ErrorBadRequest("inventory_id required"))?;
+        
     let mut conn = pool.get().expect("Failed to get DB connection");
     
+    use crate::schema::inventory_items::dsl::inventory_id;
     let items = inventory_items::table
+        .filter(inventory_id.eq(inventory_id_param))
         .load::<InventoryItem>(&mut conn)
         .map_err(|e| {
             eprintln!("Error loading inventory: {:?}", e);
@@ -56,9 +62,10 @@ pub async fn add_item(
     
     // Check if item with same barcode exists
     let existing_item = if let Some(ref barcode_val) = req.barcode {
-        use crate::schema::inventory_items::dsl::barcode;
+        use crate::schema::inventory_items::dsl::{barcode, inventory_id};
         inventory_items::table
             .filter(barcode.eq(barcode_val))
+            .filter(inventory_id.eq(&req.inventory_id))
             .first::<InventoryItem>(&mut conn)
             .ok()
     } else {
@@ -85,6 +92,7 @@ pub async fn add_item(
         // Create new item
         let new_item = NewInventoryItem {
             id: Uuid::new_v4().to_string(),
+            inventory_id: req.inventory_id.clone(),
             barcode: req.barcode.clone(),
             name: item_name,
             quantity: qty,
@@ -125,9 +133,10 @@ pub async fn remove_item(
             .first::<InventoryItem>(&mut conn)
             .ok()
     } else if let Some(ref barcode_val) = req.barcode {
-        use crate::schema::inventory_items::dsl::barcode;
+        use crate::schema::inventory_items::dsl::{barcode, inventory_id};
         inventory_items::table
             .filter(barcode.eq(barcode_val))
+            .filter(inventory_id.eq(&req.inventory_id))
             .first::<InventoryItem>(&mut conn)
             .ok()
     } else {
@@ -190,6 +199,8 @@ pub async fn search_inventory(
 ) -> Result<HttpResponse> {
     let search_query = query.get("q")
         .ok_or_else(|| actix_web::error::ErrorBadRequest("Query parameter 'q' required"))?;
+    let inventory_id_param = query.get("inventory_id")
+        .ok_or_else(|| actix_web::error::ErrorBadRequest("inventory_id required"))?;
     
     let mut conn = pool.get().expect("Failed to get DB connection");
     
@@ -198,6 +209,7 @@ pub async fn search_inventory(
     let pattern = format!("%{}%", search_query);
     
     let items = inventory_items
+        .filter(inventory_id.eq(inventory_id_param))
         .filter(name.like(&pattern).or(barcode.like(&pattern)))
         .load::<InventoryItem>(&mut conn)
         .map_err(|e| {
@@ -251,4 +263,126 @@ pub async fn get_item_by_barcode(
             "error": "Product not found"
         })))
     }
+}
+
+// --- User & Inventory Management Handlers ---
+
+#[derive(serde::Deserialize)]
+pub struct CreateUserRequest {
+    pub username: String,
+    pub password: String,
+}
+
+#[actix_web::post("/api/users/register")]
+pub async fn register_user(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    req: web::Json<CreateUserRequest>,
+) -> Result<HttpResponse> {
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    // Note: In a real app, use argon2 to hash the password here
+    let password_hash = format!("HASHED_{}", req.password); 
+    
+    let new_user = NewUser {
+        id: Uuid::new_v4().to_string(),
+        username: req.username.clone(),
+        password_hash,
+    };
+    
+    diesel::insert_into(crate::schema::users::table)
+        .values(&new_user)
+        .execute(&mut conn)
+        .map_err(|e| {
+            eprintln!("Error creating user: {:?}", e);
+            actix_web::error::ErrorInternalServerError("Username likely taken")
+        })?;
+        
+    Ok(HttpResponse::Created().json(serde_json::json!({"id": new_user.id, "username": new_user.username})))
+}
+
+#[derive(serde::Deserialize)]
+pub struct CreateInventoryRequest {
+    pub name: String,
+    pub owner_id: String, // In real app, get this from auth token
+}
+
+#[actix_web::post("/api/inventories")]
+pub async fn create_inventory(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    req: web::Json<CreateInventoryRequest>,
+) -> Result<HttpResponse> {
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    let new_inv = NewInventory {
+        id: Uuid::new_v4().to_string(),
+        name: req.name.clone(),
+        owner_id: req.owner_id.clone(),
+    };
+    
+    diesel::insert_into(crate::schema::inventories::table)
+        .values(&new_inv)
+        .execute(&mut conn)
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        
+    // Also add owner to inventory_users
+    let inv_user = NewInventoryUser {
+        inventory_id: new_inv.id.clone(),
+        user_id: req.owner_id.clone(),
+        role: "owner".to_string(),
+    };
+    
+    diesel::insert_into(crate::schema::inventory_users::table)
+        .values(&inv_user)
+        .execute(&mut conn)
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        
+    Ok(HttpResponse::Created().json(new_inv))
+}
+
+#[derive(serde::Deserialize)]
+pub struct LoginRequest {
+    pub username: String,
+    pub password: String,
+}
+
+#[actix_web::post("/api/users/login")]
+pub async fn login_user(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    req: web::Json<LoginRequest>,
+) -> Result<HttpResponse> {
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    use crate::schema::users::dsl::*;
+    
+    let user = users
+        .filter(username.eq(&req.username))
+        .first::<User>(&mut conn)
+        .map_err(|_| actix_web::error::ErrorUnauthorized("Invalid credentials"))?;
+        
+    // Simple hash check (matching register_user logic)
+    let expected_hash = format!("HASHED_{}", req.password);
+    if user.password_hash != expected_hash {
+        return Err(actix_web::error::ErrorUnauthorized("Invalid credentials"));
+    }
+    
+    Ok(HttpResponse::Ok().json(serde_json::json!({"id": user.id, "username": user.username})))
+}
+
+#[actix_web::get("/api/users/{user_id}/inventories")]
+pub async fn get_user_inventories(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+) -> Result<HttpResponse> {
+    let user_id_param = path.into_inner();
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    // Join inventory_users with inventories to get the user's inventories
+    let user_invs = crate::schema::inventory_users::table
+        .inner_join(crate::schema::inventories::table)
+        .filter(crate::schema::inventory_users::user_id.eq(user_id_param))
+        .select(crate::schema::inventories::all_columns)
+        .load::<Inventory>(&mut conn)
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        
+    Ok(HttpResponse::Ok().json(user_invs))
 }

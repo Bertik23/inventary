@@ -1,17 +1,25 @@
 use yew::prelude::*;
-use crate::app::AppPage;
+use yew_router::prelude::*;
+use crate::router::Route;
 use crate::api::{fetch_inventory, InventoryItem};
+use crate::app::InventoryContext;
 
 #[derive(Properties, PartialEq)]
-pub struct Props {
-    pub navigate: Callback<AppPage>,
-}
+pub struct Props {}
 
 #[function_component(InventoryList)]
-pub fn inventory_list(props: &Props) -> Html {
+pub fn inventory_list(_props: &Props) -> Html {
     let items = use_state(|| Vec::<InventoryItem>::new());
     let loading = use_state(|| true);
     let error = use_state(|| Option::<String>::None);
+    
+    let inventory_context = use_context::<InventoryContext>().expect("InventoryContext not found");
+    let inventory_id = match &*inventory_context.inventory_id {
+        Some(id) => id.clone(),
+        None => {
+            return html! { <div>{"No inventory selected"}</div> };
+        }
+    };
     
     {
         let items = items.clone();
@@ -24,7 +32,7 @@ pub fn inventory_list(props: &Props) -> Html {
             let error = error.clone();
             
             wasm_bindgen_futures::spawn_local(async move {
-                match fetch_inventory().await {
+                match fetch_inventory(&inventory_id).await {
                     Ok(inventory) => {
                         items.set(inventory);
                         loading.set(false);
@@ -38,10 +46,13 @@ pub fn inventory_list(props: &Props) -> Html {
         });
     }
     
-    let navigate = props.navigate.clone();
-    let on_back = Callback::from(move |_| {
-        navigate.emit(AppPage::MainMenu);
-    });
+    let navigator = use_navigator().unwrap();
+    let on_back = {
+        let navigator = navigator.clone();
+        Callback::from(move |_| {
+            navigator.push(&Route::MainMenu);
+        })
+    };
     
     html! {
         <div class="max-w-lg mx-auto p-4 min-h-screen bg-gray-50">
