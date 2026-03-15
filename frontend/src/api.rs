@@ -3,7 +3,19 @@ use wasm_bindgen::{JsValue, JsCast};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, RequestMode, Response};
 
-const API_BASE: &str = "http://127.0.0.1:8080/api";
+const DEFAULT_API_BASE: &str = "http://127.0.0.1:8080/api";
+
+pub fn get_api_base() -> String {
+    let window = web_sys::window().unwrap();
+    let local_storage = window.local_storage().unwrap().unwrap();
+    local_storage.get_item("api_base").unwrap().unwrap_or_else(|| DEFAULT_API_BASE.to_string())
+}
+
+pub fn set_api_base(url: &str) {
+    let window = web_sys::window().unwrap();
+    let local_storage = window.local_storage().unwrap().unwrap();
+    local_storage.set_item("api_base", url).unwrap();
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct InventoryItem {
@@ -68,52 +80,52 @@ pub struct CreateInventoryRequest {
 }
 
 pub async fn fetch_inventory(inventory_id: &str) -> Result<Vec<InventoryItem>, String> {
-    let url = format!("{}/inventory?inventory_id={}", API_BASE, inventory_id);
+    let url = format!("{}/inventory?inventory_id={}", get_api_base(), inventory_id);
     fetch_json(&url, None::<&()>).await
 }
 
 pub async fn add_item(req: AddItemRequest) -> Result<InventoryItem, String> {
-    let url = format!("{}/inventory/add", API_BASE);
+    let url = format!("{}/inventory/add", get_api_base());
     fetch_json(&url, Some(&req)).await
 }
 
 pub async fn remove_item(req: RemoveItemRequest) -> Result<InventoryItem, String> {
-    let url = format!("{}/inventory/remove", API_BASE);
+    let url = format!("{}/inventory/remove", get_api_base());
     fetch_json(&url, Some(&req)).await
 }
 
 pub async fn search_products(query: &str) -> Result<Vec<ProductInfo>, String> {
-    let url = format!("{}/search?q={}", API_BASE, urlencoding::encode(query));
+    let url = format!("{}/search?q={}", get_api_base(), urlencoding::encode(query));
     fetch_json(&url, None::<&()>).await
 }
 
 pub async fn search_inventory_items(query: &str, inventory_id: &str) -> Result<Vec<ProductInfo>, String> {
-    let url = format!("{}/inventory/search?q={}&inventory_id={}", API_BASE, urlencoding::encode(query), inventory_id);
+    let url = format!("{}/inventory/search?q={}&inventory_id={}", get_api_base(), urlencoding::encode(query), inventory_id);
     fetch_json(&url, None::<&()>).await
 }
 
 pub async fn get_product_by_barcode(barcode: &str) -> Result<ProductInfo, String> {
-    let url = format!("{}/product/{}", API_BASE, barcode);
+    let url = format!("{}/product/{}", get_api_base(), barcode);
     fetch_json(&url, None::<&()>).await
 }
 
 pub async fn login_user(req: AuthRequest) -> Result<User, String> {
-    let url = format!("{}/users/login", API_BASE);
+    let url = format!("{}/users/login", get_api_base());
     fetch_json(&url, Some(&req)).await
 }
 
 pub async fn register_user(req: AuthRequest) -> Result<User, String> {
-    let url = format!("{}/users/register", API_BASE);
+    let url = format!("{}/users/register", get_api_base());
     fetch_json(&url, Some(&req)).await
 }
 
 pub async fn get_user_inventories(user_id: &str) -> Result<Vec<Inventory>, String> {
-    let url = format!("{}/users/{}/inventories", API_BASE, user_id);
+    let url = format!("{}/users/{}/inventories", get_api_base(), user_id);
     fetch_json(&url, None::<&()>).await
 }
 
 pub async fn create_inventory(req: CreateInventoryRequest) -> Result<Inventory, String> {
-    let url = format!("{}/inventories", API_BASE);
+    let url = format!("{}/inventories", get_api_base());
     fetch_json(&url, Some(&req)).await
 }
 
@@ -136,17 +148,17 @@ pub struct UnshareInventoryRequest {
 }
 
 pub async fn get_inventory_users(inventory_id: &str) -> Result<Vec<SharedUser>, String> {
-    let url = format!("{}/inventories/{}/users", API_BASE, inventory_id);
+    let url = format!("{}/inventories/{}/users", get_api_base(), inventory_id);
     fetch_json(&url, None::<&()>).await
 }
 
 pub async fn share_inventory(inventory_id: &str, req: ShareInventoryRequest) -> Result<(), String> {
-    let url = format!("{}/inventories/{}/share", API_BASE, inventory_id);
+    let url = format!("{}/inventories/{}/share", get_api_base(), inventory_id);
     fetch_json(&url, Some(&req)).await
 }
 
 pub async fn unshare_inventory(inventory_id: &str, req: UnshareInventoryRequest) -> Result<(), String> {
-    let url = format!("{}/inventories/{}/share", API_BASE, inventory_id);
+    let url = format!("{}/inventories/{}/share", get_api_base(), inventory_id);
     fetch_delete(&url, Some(&req)).await
 }
 
