@@ -117,6 +117,86 @@ pub async fn create_inventory(req: CreateInventoryRequest) -> Result<Inventory, 
     fetch_json(&url, Some(&req)).await
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct SharedUser {
+    pub id: String,
+    pub username: String,
+    pub role: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ShareInventoryRequest {
+    pub username: String,
+    pub role: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct UnshareInventoryRequest {
+    pub user_id: String,
+}
+
+pub async fn get_inventory_users(inventory_id: &str) -> Result<Vec<SharedUser>, String> {
+    let url = format!("{}/inventories/{}/users", API_BASE, inventory_id);
+    fetch_json(&url, None::<&()>).await
+}
+
+pub async fn share_inventory(inventory_id: &str, req: ShareInventoryRequest) -> Result<(), String> {
+    let url = format!("{}/inventories/{}/share", API_BASE, inventory_id);
+    fetch_json(&url, Some(&req)).await
+}
+
+pub async fn unshare_inventory(inventory_id: &str, req: UnshareInventoryRequest) -> Result<(), String> {
+    let url = format!("{}/inventories/{}/share", API_BASE, inventory_id);
+    fetch_delete(&url, Some(&req)).await
+}
+
+async fn fetch_delete<T: Serialize>(
+    url: &str,
+    body: Option<&T>,
+) -> Result<(), String> {
+    let mut opts = RequestInit::new();
+    opts.set_method("DELETE");
+    opts.set_mode(RequestMode::Cors);
+    
+    if let Some(body_data) = body {
+        let body_str = serde_json::to_string(body_data).map_err(|e| e.to_string())?;
+        let body_js = JsValue::from_str(&body_str);
+        opts.set_body(&body_js);
+        let headers = web_sys::Headers::new().unwrap();
+        headers.set("Content-Type", "application/json").unwrap();
+        let headers_js: JsValue = headers.into();
+        opts.set_headers(&headers_js);
+    }
+    
+    let request = Request::new_with_str_and_init(url, &opts)
+        .map_err(|e| format!("Failed to create request: {:?}", e))?;
+    
+    let window = web_sys::window().unwrap();
+    let resp_value = JsFuture::from(window.fetch_with_request(&request))
+        .await
+        .map_err(|e| format!("Request failed: {:?}", e))?;
+    
+    let resp: Response = resp_value.dyn_into()
+        .map_err(|e| format!("Response is not a Response: {:?}", e))?;
+    
+    if !resp.ok() {
+        let status = resp.status();
+        // Try to parse error message from JSON body
+        if let Ok(promise) = resp.json() {
+            if let Ok(json) = JsFuture::from(promise).await {
+                if let Ok(error_val) = js_sys::Reflect::get(&json, &JsValue::from_str("error")) {
+                    if let Some(msg) = error_val.as_string() {
+                        return Err(msg);
+                    }
+                }
+            }
+        }
+        return Err(format!("HTTP error: {}", status));
+    }
+    
+    Ok(())
+}
+
 async fn fetch_json<T: Serialize, R: for<'de> Deserialize<'de>>(
     url: &str,
     body: Option<&T>,

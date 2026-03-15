@@ -386,3 +386,110 @@ pub async fn get_user_inventories(
         
     Ok(HttpResponse::Ok().json(user_invs))
 }
+
+#[derive(serde::Deserialize)]
+pub struct ShareInventoryRequest {
+    pub username: String,
+    pub role: String,
+}
+
+#[actix_web::post("/api/inventories/{inventory_id}/share")]
+pub async fn share_inventory(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+    req: web::Json<ShareInventoryRequest>,
+) -> Result<HttpResponse> {
+    let inventory_id_param = path.into_inner();
+    let mut conn = pool.get().expect("Failed to get DB connection");
+
+    // 1. Find user by username
+    use crate::schema::users::dsl::{users, username};
+    let user_to_share_with = users
+        .filter(username.eq(&req.username))
+        .first::<User>(&mut conn)
+        .map_err(|_| actix_web::error::ErrorNotFound("User not found"))?;
+
+    // 2. Check if user is already in the inventory
+    use crate::schema::inventory_users::dsl::{inventory_users, inventory_id, user_id};
+    let existing_share = inventory_users
+        .filter(inventory_id.eq(&inventory_id_param))
+        .filter(user_id.eq(&user_to_share_with.id))
+        .first::<InventoryUser>(&mut conn)
+        .ok();
+
+    if existing_share.is_some() {
+        return Err(actix_web::error::ErrorConflict("User already has access to this inventory"));
+    }
+
+    // 3. Insert into inventory_users
+    let new_inventory_user = NewInventoryUser {
+        inventory_id: inventory_id_param,
+        user_id: user_to_share_with.id,
+        role: req.role.clone(),
+    };
+
+    diesel::insert_into(inventory_users)
+        .values(&new_inventory_user)
+        .execute(&mut conn)
+        .map_err(|e| {
+            eprintln!("Error sharing inventory: {:?}", e);
+            actix_web::error::ErrorInternalServerError("Failed to share inventory")
+        })?;
+
+    Ok(HttpResponse::Ok().finish())
+}
+
+#[actix_web::get("/api/inventories/{inventory_id}/users")]
+pub async fn get_inventory_users(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+) -> Result<HttpResponse> {
+    let inventory_id_param = path.into_inner();
+    let mut conn = pool.get().expect("Failed to get DB connection");
+
+    use crate::schema::inventory_users::dsl as iu;
+    use crate::schema::users::dsl as u;
+
+    let results = iu::inventory_users
+        .inner_join(u::users.on(iu::user_id.eq(u::id)))
+        .filter(iu::inventory_id.eq(inventory_id_param))
+        .select((u::id, u::username, iu::role))
+        .load::<SharedUser>(&mut conn)
+        .map_err(|e| {
+            eprintln!("Error loading inventory users: {:?}", e);
+            actix_web::error::ErrorInternalServerError("Failed to load inventory users")
+        })?;
+
+    Ok(HttpResponse::Ok().json(results))
+}
+
+#[derive(serde::Deserialize)]
+pub struct UnshareInventoryRequest {
+    pub user_id: String,
+}
+
+#[actix_web::delete("/api/inventories/{inventory_id}/share")]
+pub async fn unshare_inventory(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+    req: web::Json<UnshareInventoryRequest>,
+) -> Result<HttpResponse> {
+    let inventory_id_param = path.into_inner();
+    let mut conn = pool.get().expect("Failed to get DB connection");
+
+    use crate::schema::inventory_users::dsl::{inventory_users, inventory_id, user_id};
+
+    diesel::delete(
+        inventory_users
+            .filter(inventory_id.eq(inventory_id_param))
+            .filter(user_id.eq(req.user_id.clone())),
+    )
+    .execute(&mut conn)
+    .map_err(|e| {
+        eprintln!("Error unsharing inventory: {:?}", e);
+        actix_web::error::ErrorInternalServerError("Failed to unshare inventory")
+    })?;
+
+    Ok(HttpResponse::Ok().finish())
+}
+

@@ -100,3 +100,10 @@ pub struct NewInventoryUser {
     pub user_id: String,
     pub role: String,
 }
+
+#[derive(Queryable, Serialize)]
+pub struct SharedUser {
+    pub id: String,
+    pub username: String,
+    pub role: String,
+}
