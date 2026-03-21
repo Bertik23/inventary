@@ -62,7 +62,9 @@
         "manage_inventories_desc": "Switch or create new inventories",
         "logout": "Log Out",
         "account_settings": "Account Settings",
-        "account_desc": "Manage your profile and security"
+        "account_desc": "Manage your profile and security",
+        "admin_panel": "Admin Panel",
+        "admin_desc": "User management and system settings"
     },
     "inventory": {
         "title": "Inventory",
@@ -146,5 +148,29 @@
         "profile_updated": "Profile updated successfully",
         "password_changed": "Password changed successfully",
         "account_deleted": "Account deleted successfully"
+    },
+    "admin": {
+        "title": "User Management",
+        "users_list": "All Users",
+        "role_label": "Role",
+        "actions": "Actions",
+        "update_role": "Update Role",
+        "role_updated": "User role updated successfully",
+        "admin_access_required": "Admin access required",
+        "user_role": "User",
+        "admin_role": "Admin",
+        "set_as_admin": "Make Admin",
+        "set_as_user": "Make User",
+        "edit_user": "Edit User",
+        "reset_password": "Reset Password",
+        "delete_user": "Delete User",
+        "new_username": "New Username",
+        "new_email": "New Email",
+        "new_password": "New Password",
+        "profile_updated": "User profile updated successfully",
+        "password_reset": "User password reset successfully",
+        "user_deleted": "User deleted successfully",
+        "delete_confirm_title": "Delete User?",
+        "delete_confirm_desc": "Are you sure you want to delete user {name}? This cannot be undone."
     }
 }

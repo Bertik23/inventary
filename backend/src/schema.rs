@@ -49,6 +49,7 @@ diesel::table! {
         reset_token -> Nullable<Text>,
         reset_token_expiry -> Nullable<Timestamp>,
         created_at -> Timestamp,
+        role -> Text,
     }
 }
 

@@ -68,7 +68,15 @@ pub fn main_menu(_props: &Props) -> Html {
         })
     };
 
+    let on_admin_click = {
+        let navigator = navigator.clone();
+        Callback::from(move |_| {
+            navigator.push(&Route::Admin);
+        })
+    };
+
     let on_manage_custom_items_click = {
+
         let navigator = navigator.clone();
         let inventory_id = (*inventory_context.inventory_id).clone();
         Callback::from(move |_| {
@@ -221,6 +229,26 @@ pub fn main_menu(_props: &Props) -> Html {
                             <p class="text-sm text-gray-500">{i18n.t("main_menu.account_desc")}</p>
                         </div>
                     </button>
+
+                    if let Some(user) = &*user_context.user {
+                        if user.role == "admin" {
+                            <button
+                                onclick={on_admin_click}
+                                class="w-full group relative flex items-center p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-teal-300 transition-all duration-200 text-left"
+                            >
+                                <div class="flex-shrink-0 h-12 w-12 bg-teal-50 text-teal-600 rounded-lg flex items-center justify-center group-hover:bg-teal-600 group-hover:text-white transition-colors duration-200">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </div>
+                                <div class="ml-4 flex-1">
+                                    <h3 class="text-lg font-medium text-gray-900">{i18n.t("main_menu.admin_panel")}</h3>
+                                    <p class="text-sm text-gray-500">{i18n.t("main_menu.admin_desc")}</p>
+                                </div>
+                            </button>
+                        }
+                    }
 
                     <button
                         onclick={on_logout_click}

@@ -62,7 +62,9 @@
         "manage_inventories_desc": "Přepněte nebo vytvořte nové inventáře",
         "logout": "Odhlásit se",
         "account_settings": "Nastavení účtu",
-        "account_desc": "Spravujte svůj profil a zabezpečení"
+        "account_desc": "Spravujte svůj profil a zabezpečení",
+        "admin_panel": "Administrace",
+        "admin_desc": "Správa uživatelů a nastavení systému"
     },
     "inventory": {
         "title": "Inventář",
@@ -146,5 +148,29 @@
         "profile_updated": "Profil byl úspěšně aktualizován",
         "password_changed": "Heslo bylo úspěšně změněno",
         "account_deleted": "Účet byl úspěšně smazán"
+    },
+    "admin": {
+        "title": "Správa uživatelů",
+        "users_list": "Všichni uživatelé",
+        "role_label": "Role",
+        "actions": "Akce",
+        "update_role": "Upravit roli",
+        "role_updated": "Role uživatele byla úspěšně upravena",
+        "admin_access_required": "Vyžadován přístup administrátora",
+        "user_role": "Uživatel",
+        "admin_role": "Administrátor",
+        "set_as_admin": "Nastavit jako admina",
+        "set_as_user": "Nastavit jako uživatele",
+        "edit_user": "Upravit uživatele",
+        "reset_password": "Resetovat heslo",
+        "delete_user": "Smazat uživatele",
+        "new_username": "Nové uživ. jméno",
+        "new_email": "Nový e-mail",
+        "new_password": "Nové heslo",
+        "profile_updated": "Profil uživatele byl úspěšně aktualizován",
+        "password_reset": "Heslo uživatele bylo úspěšně resetováno",
+        "user_deleted": "Uživatel byl úspěšně smazán",
+        "delete_confirm_title": "Smazat uživatele?",
+        "delete_confirm_desc": "Opravdu chcete smazat uživatele {name}? Tuto akci nelze vrátit zpět."
     }
 }

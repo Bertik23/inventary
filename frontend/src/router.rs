@@ -23,6 +23,8 @@ pub enum Route {
     CustomItems { id: String },
     #[at("/profile")]
     Profile,
+    #[at("/admin")]
+    Admin,
 }
 
 pub fn switch(routes: Route) -> Html {
@@ -52,6 +54,9 @@ pub fn switch(routes: Route) -> Html {
         }
         Route::Profile => {
             html! { <crate::components::profile::Profile /> }
+        }
+        Route::Admin => {
+            html! { <crate::components::admin::Admin /> }
         }
     }
 }

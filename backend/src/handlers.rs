@@ -534,16 +534,23 @@ pub async fn register_user(
 ) -> Result<HttpResponse> {
     let mut conn = pool.get().expect("Failed to get DB connection");
     
-    let password_hash = hash(&req.password, DEFAULT_COST).map_err(|e| {
+    let hashed_password = hash(&req.password, DEFAULT_COST).map_err(|e| {
         eprintln!("Hashing error: {:?}", e);
         actix_web::error::ErrorInternalServerError("Internal server error")
     })?;
+    
+    use crate::schema::users::dsl::*;
+    
+    // Check if any users exist. If not, make first user an admin.
+    let user_count = users.count().get_result::<i64>(&mut conn).unwrap_or(0);
+    let role_val = if user_count == 0 { "admin" } else { "user" };
     
     let new_user = NewUser {
         id: Uuid::new_v4().to_string(),
         username: req.username.clone(),
         email: req.email.clone(),
-        password_hash,
+        password_hash: hashed_password,
+        role: role_val.to_string(),
     };
     
     diesel::insert_into(crate::schema::users::table)
@@ -554,7 +561,7 @@ pub async fn register_user(
             actix_web::error::ErrorInternalServerError("Username or email likely taken")
         })?;
         
-    Ok(HttpResponse::Created().json(serde_json::json!({"id": new_user.id, "username": new_user.username, "email": new_user.email})))
+    Ok(HttpResponse::Created().json(serde_json::json!({"id": new_user.id, "username": new_user.username, "email": new_user.email, "role": new_user.role})))
 }
 
 #[derive(serde::Deserialize)]
@@ -621,7 +628,7 @@ pub async fn login_user(
         return Err(actix_web::error::ErrorUnauthorized("Invalid credentials"));
     }
     
-    Ok(HttpResponse::Ok().json(serde_json::json!({"id": user.id, "username": user.username, "email": user.email})))
+    Ok(HttpResponse::Ok().json(serde_json::json!({"id": user.id, "username": user.username, "email": user.email, "role": user.role})))
 }
 
 #[actix_web::post("/api/users/forgot-password")]
@@ -735,7 +742,180 @@ pub async fn update_user(
         .first::<User>(&mut conn)
         .map_err(|_| actix_web::error::ErrorNotFound("User not found"))?;
         
-    Ok(HttpResponse::Ok().json(serde_json::json!({"id": user.id, "username": user.username, "email": user.email})))
+    Ok(HttpResponse::Ok().json(serde_json::json!({"id": user.id, "username": user.username, "email": user.email, "role": user.role})))
+}
+
+#[derive(serde::Deserialize)]
+pub struct UpdateUserRoleRequest {
+    pub role: String,
+}
+
+#[actix_web::get("/api/admin/users")]
+pub async fn list_users(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> Result<HttpResponse> {
+    let admin_id = query.get("admin_id")
+        .ok_or_else(|| actix_web::error::ErrorBadRequest("admin_id required"))?;
+        
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    use crate::schema::users::dsl::*;
+    
+    // Check if requester is admin
+    let requester = users.find(admin_id)
+        .first::<User>(&mut conn)
+        .map_err(|_| actix_web::error::ErrorUnauthorized("Unauthorized"))?;
+        
+    if requester.role != "admin" {
+        return Err(actix_web::error::ErrorForbidden("Admin access required"));
+    }
+    
+    let all_users = users
+        .load::<User>(&mut conn)
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        
+    Ok(HttpResponse::Ok().json(all_users))
+}
+
+#[actix_web::put("/api/admin/users/{user_id}/role")]
+pub async fn update_user_role(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+    req: web::Json<UpdateUserRoleRequest>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> Result<HttpResponse> {
+    let target_user_id = path.into_inner();
+    let admin_id = query.get("admin_id")
+        .ok_or_else(|| actix_web::error::ErrorBadRequest("admin_id required"))?;
+        
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    use crate::schema::users::dsl::*;
+    
+    // Check if requester is admin
+    let requester = users.find(admin_id)
+        .first::<User>(&mut conn)
+        .map_err(|_| actix_web::error::ErrorUnauthorized("Unauthorized"))?;
+        
+    if requester.role != "admin" {
+        return Err(actix_web::error::ErrorForbidden("Admin access required"));
+    }
+    
+    diesel::update(users.find(&target_user_id))
+        .set(role.eq(&req.role))
+        .execute(&mut conn)
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        
+    Ok(HttpResponse::Ok().finish())
+}
+
+#[actix_web::put("/api/admin/users/{user_id}")]
+pub async fn admin_update_user(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+    req: web::Json<AdminUpdateUserRequest>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> Result<HttpResponse> {
+    let target_user_id = path.into_inner();
+    let admin_id = query.get("admin_id")
+        .ok_or_else(|| actix_web::error::ErrorBadRequest("admin_id required"))?;
+        
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    use crate::schema::users::dsl::*;
+    
+    // Check if requester is admin
+    let requester = users.find(admin_id)
+        .first::<User>(&mut conn)
+        .map_err(|_| actix_web::error::ErrorUnauthorized("Unauthorized"))?;
+        
+    if requester.role != "admin" {
+        return Err(actix_web::error::ErrorForbidden("Admin access required"));
+    }
+    
+    if let Some(ref new_username) = req.username {
+        diesel::update(users.find(&target_user_id))
+            .set(username.eq(new_username))
+            .execute(&mut conn)
+            .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+    }
+    
+    if let Some(ref new_email) = req.email {
+        diesel::update(users.find(&target_user_id))
+            .set(email.eq(new_email))
+            .execute(&mut conn)
+            .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+    }
+    
+    Ok(HttpResponse::Ok().finish())
+}
+
+#[actix_web::post("/api/admin/users/{user_id}/reset-password")]
+pub async fn admin_reset_password(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+    req: web::Json<AdminResetPasswordRequest>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> Result<HttpResponse> {
+    let target_user_id = path.into_inner();
+    let admin_id = query.get("admin_id")
+        .ok_or_else(|| actix_web::error::ErrorBadRequest("admin_id required"))?;
+        
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    use crate::schema::users::dsl::*;
+    
+    // Check if requester is admin
+    let requester = users.find(admin_id)
+        .first::<User>(&mut conn)
+        .map_err(|_| actix_web::error::ErrorUnauthorized("Unauthorized"))?;
+        
+    if requester.role != "admin" {
+        return Err(actix_web::error::ErrorForbidden("Admin access required"));
+    }
+    
+    let hashed_password = hash(&req.new_password, DEFAULT_COST).map_err(|e| {
+        eprintln!("Hashing error: {:?}", e);
+        actix_web::error::ErrorInternalServerError("Internal server error")
+    })?;
+    
+    diesel::update(users.find(&target_user_id))
+        .set(password_hash.eq(hashed_password))
+        .execute(&mut conn)
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        
+    Ok(HttpResponse::Ok().finish())
+}
+
+#[actix_web::delete("/api/admin/users/{user_id}")]
+pub async fn admin_delete_user(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> Result<HttpResponse> {
+    let target_user_id = path.into_inner();
+    let admin_id = query.get("admin_id")
+        .ok_or_else(|| actix_web::error::ErrorBadRequest("admin_id required"))?;
+        
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    use crate::schema::users::dsl::*;
+    
+    // Check if requester is admin
+    let requester = users.find(admin_id)
+        .first::<User>(&mut conn)
+        .map_err(|_| actix_web::error::ErrorUnauthorized("Unauthorized"))?;
+        
+    if requester.role != "admin" {
+        return Err(actix_web::error::ErrorForbidden("Admin access required"));
+    }
+    
+    diesel::delete(users.find(&target_user_id))
+        .execute(&mut conn)
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        
+    Ok(HttpResponse::Ok().finish())
 }
 
 #[actix_web::post("/api/users/{user_id}/change-password")]

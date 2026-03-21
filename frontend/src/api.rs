@@ -84,6 +84,7 @@ pub struct User {
     pub id: String,
     pub username: String,
     pub email: String,
+    pub role: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -225,6 +226,48 @@ pub async fn change_password(user_id: &str, req: ChangePasswordRequest) -> Resul
 
 pub async fn delete_user(user_id: &str) -> Result<(), String> {
     let url = format!("{}/users/{}", get_api_base(), user_id);
+    fetch_delete(&url, None::<&()>).await
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct UpdateUserRoleRequest {
+    pub role: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AdminUpdateUserRequest {
+    pub username: Option<String>,
+    pub email: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AdminResetPasswordRequest {
+    pub new_password: String,
+}
+
+pub async fn list_users(admin_id: &str) -> Result<Vec<User>, String> {
+    let url = format!("{}/admin/users?admin_id={}", get_api_base(), admin_id);
+    fetch_json(&url, None::<&()>).await
+}
+
+pub async fn update_user_role(admin_id: &str, user_id: &str, role: &str) -> Result<(), String> {
+    let url = format!("{}/admin/users/{}/role?admin_id={}", get_api_base(), user_id, admin_id);
+    let req = UpdateUserRoleRequest { role: role.to_string() };
+    fetch_put(&url, Some(&req)).await
+}
+
+pub async fn admin_update_user(admin_id: &str, user_id: &str, req: AdminUpdateUserRequest) -> Result<(), String> {
+    let url = format!("{}/admin/users/{}?admin_id={}", get_api_base(), user_id, admin_id);
+    fetch_put(&url, Some(&req)).await
+}
+
+pub async fn admin_reset_password(admin_id: &str, user_id: &str, req: AdminResetPasswordRequest) -> Result<(), String> {
+    let url = format!("{}/admin/users/{}/reset-password?admin_id={}", get_api_base(), user_id, admin_id);
+    fetch_json(&url, Some(&req)).await
+}
+
+pub async fn admin_delete_user(admin_id: &str, user_id: &str) -> Result<(), String> {
+    let url = format!("{}/admin/users/{}?admin_id={}", get_api_base(), user_id, admin_id);
     fetch_delete(&url, None::<&()>).await
 }
 

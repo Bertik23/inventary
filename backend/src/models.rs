@@ -70,6 +70,7 @@ pub struct User {
     #[serde(skip)]
     pub reset_token_expiry: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
+    pub role: String,
 }
 
 #[derive(Insertable, Deserialize)]
@@ -79,6 +80,7 @@ pub struct NewUser {
     pub username: String,
     pub email: String,
     pub password_hash: String,
+    pub role: String,
 }
 
 #[derive(Deserialize)]
@@ -101,6 +103,17 @@ pub struct UpdateUserRequest {
 #[derive(Deserialize)]
 pub struct ChangePasswordRequest {
     pub current_password: String,
+    pub new_password: String,
+}
+
+#[derive(Deserialize)]
+pub struct AdminUpdateUserRequest {
+    pub username: Option<String>,
+    pub email: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct AdminResetPasswordRequest {
     pub new_password: String,
 }
 
