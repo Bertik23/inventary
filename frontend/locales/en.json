@@ -112,7 +112,10 @@
         "item_removed": "Item removed successfully!",
         "no_img": "No Img",
         "selected_product": "Selected Product",
-        "barcode_placeholder": "EAN-13, UPC, etc."
+        "barcode_placeholder": "EAN-13, UPC, etc.",
+        "unknown_title": "Unknown Product",
+        "product_name": "Product Name",
+        "product_brand": "Brand (Optional)"
     },
     "custom_items": {
         "title": "Quick Items",
@@ -171,6 +174,12 @@
         "password_reset": "User password reset successfully",
         "user_deleted": "User deleted successfully",
         "delete_confirm_title": "Delete User?",
-        "delete_confirm_desc": "Are you sure you want to delete user {name}? This cannot be undone."
+        "delete_confirm_desc": "Are you sure you want to delete user {name}? This cannot be undone.",
+        "pending_products": "Pending Products",
+        "process_product": "Process Product",
+        "action_keep_local": "Keep Local",
+        "action_contribute": "Contribute to OFF",
+        "action_discard": "Discard",
+        "processed_success": "Product processed successfully"
     }
 }

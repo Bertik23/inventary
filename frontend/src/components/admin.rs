@@ -1,6 +1,7 @@
 use crate::api::{
     list_users, update_user_role, admin_update_user, admin_reset_password, admin_delete_user,
-    User, AdminUpdateUserRequest, AdminResetPasswordRequest
+    list_pending_products, process_pending_product,
+    User, AdminUpdateUserRequest, AdminResetPasswordRequest, PendingProduct, ProcessProductRequest
 };
 use crate::app::UserContext;
 use crate::router::Route;
@@ -15,6 +16,13 @@ enum AdminAction {
     Edit(User),
     ResetPassword(User),
     Delete(User),
+    ProcessProduct(PendingProduct),
+}
+
+#[derive(Clone, PartialEq)]
+enum AdminTab {
+    Users,
+    PendingProducts,
 }
 
 #[function_component(Admin)]
@@ -31,7 +39,9 @@ pub fn admin() -> Html {
         }
     };
 
+    let active_tab = use_state(|| AdminTab::Users);
     let users = use_state(|| Vec::<User>::new());
+    let pending_products = use_state(|| Vec::<PendingProduct>::new());
     let loading = use_state(|| true);
     let error = use_state(|| Option::<String>::None);
     let message = use_state(|| Option::<String>::None);
@@ -41,24 +51,41 @@ pub fn admin() -> Html {
     let edit_username = use_state(|| String::new());
     let edit_email = use_state(|| String::new());
     let reset_password_val = use_state(|| String::new());
+    let process_name = use_state(|| String::new());
+    let process_brand = use_state(|| String::new());
+    let process_unit = use_state(|| String::new());
 
-    let fetch_users = {
+    let fetch_data = {
         let users = users.clone();
+        let pending_products = pending_products.clone();
         let loading = loading.clone();
         let error = error.clone();
         let admin_id = current_user.id.clone();
+        let active_tab = active_tab.clone();
 
         Callback::from(move |_| {
             let users = users.clone();
+            let pending_products = pending_products.clone();
             let loading = loading.clone();
             let error = error.clone();
             let admin_id = admin_id.clone();
+            let active_tab_val = (*active_tab).clone();
 
             loading.set(true);
             wasm_bindgen_futures::spawn_local(async move {
-                match list_users(&admin_id).await {
-                    Ok(u) => users.set(u),
-                    Err(e) => error.set(Some(e)),
+                match active_tab_val {
+                    AdminTab::Users => {
+                        match list_users(&admin_id).await {
+                            Ok(u) => users.set(u),
+                            Err(e) => error.set(Some(e)),
+                        }
+                    },
+                    AdminTab::PendingProducts => {
+                        match list_pending_products(&admin_id).await {
+                            Ok(p) => pending_products.set(p),
+                            Err(e) => error.set(Some(e)),
+                        }
+                    }
                 }
                 loading.set(false);
             });
@@ -66,23 +93,24 @@ pub fn admin() -> Html {
     };
 
     {
-        let fetch_users = fetch_users.clone();
-        use_effect_with((), move |_| {
-            fetch_users.emit(());
+        let fetch_data = fetch_data.clone();
+        let active_tab = active_tab.clone();
+        use_effect_with((*active_tab).clone(), move |_| {
+            fetch_data.emit(());
             || ()
         });
     }
 
     let on_update_role = {
         let admin_id = current_user.id.clone();
-        let fetch_users = fetch_users.clone();
+        let fetch_data = fetch_data.clone();
         let message = message.clone();
         let error = error.clone();
         let i18n = i18n.clone();
 
         Callback::from(move |(user_id, new_role): (String, String)| {
             let admin_id = admin_id.clone();
-            let fetch_users = fetch_users.clone();
+            let fetch_data = fetch_data.clone();
             let message = message.clone();
             let error = error.clone();
             let i18n = i18n.clone();
@@ -91,7 +119,7 @@ pub fn admin() -> Html {
                 match update_user_role(&admin_id, &user_id, &new_role).await {
                     Ok(_) => {
                         message.set(Some(i18n.t("admin.role_updated")));
-                        fetch_users.emit(());
+                        fetch_data.emit(());
                     }
                     Err(e) => error.set(Some(e)),
                 }
@@ -104,7 +132,7 @@ pub fn admin() -> Html {
         let action = action.clone();
         let edit_username = edit_username.clone();
         let edit_email = edit_email.clone();
-        let fetch_users = fetch_users.clone();
+        let fetch_data = fetch_data.clone();
         let message = message.clone();
         let error = error.clone();
         let i18n = i18n.clone();
@@ -117,7 +145,7 @@ pub fn admin() -> Html {
                 let username = (*edit_username).clone();
                 let email = (*edit_email).clone();
                 let action = action.clone();
-                let fetch_users = fetch_users.clone();
+                let fetch_data = fetch_data.clone();
                 let message = message.clone();
                 let error = error.clone();
                 let i18n = i18n.clone();
@@ -131,7 +159,51 @@ pub fn admin() -> Html {
                         Ok(_) => {
                             message.set(Some(i18n.t("admin.profile_updated")));
                             action.set(AdminAction::None);
-                            fetch_users.emit(());
+                            fetch_data.emit(());
+                        }
+                        Err(e) => error.set(Some(e)),
+                    }
+                });
+            }
+        })
+    };
+
+    let on_submit_process = {
+        let admin_id = current_user.id.clone();
+        let action = action.clone();
+        let process_name = process_name.clone();
+        let process_brand = process_brand.clone();
+        let process_unit = process_unit.clone();
+        let fetch_data = fetch_data.clone();
+        let message = message.clone();
+        let error = error.clone();
+        let i18n = i18n.clone();
+
+        Callback::from(move |act_type: String| {
+            if let AdminAction::ProcessProduct(ref product) = *action {
+                let admin_id = admin_id.clone();
+                let barcode = product.barcode.clone();
+                let name = (*process_name).clone();
+                let brand = (*process_brand).clone();
+                let unit = (*process_unit).clone();
+                let action = action.clone();
+                let fetch_data = fetch_data.clone();
+                let message = message.clone();
+                let error = error.clone();
+                let i18n = i18n.clone();
+
+                wasm_bindgen_futures::spawn_local(async move {
+                    let req = ProcessProductRequest {
+                        action: act_type,
+                        name,
+                        brand: if brand.is_empty() { None } else { Some(brand) },
+                        unit: if unit.is_empty() { None } else { Some(unit) },
+                    };
+                    match process_pending_product(&admin_id, &barcode, req).await {
+                        Ok(_) => {
+                            message.set(Some(i18n.t("admin.processed_success")));
+                            action.set(AdminAction::None);
+                            fetch_data.emit(());
                         }
                         Err(e) => error.set(Some(e)),
                     }
@@ -144,7 +216,7 @@ pub fn admin() -> Html {
         let admin_id = current_user.id.clone();
         let action = action.clone();
         let reset_password_val = reset_password_val.clone();
-        let fetch_users = fetch_users.clone();
+        let fetch_data = fetch_data.clone();
         let message = message.clone();
         let error = error.clone();
         let i18n = i18n.clone();
@@ -156,7 +228,7 @@ pub fn admin() -> Html {
                 let user_id = user.id.clone();
                 let new_password = (*reset_password_val).clone();
                 let action = action.clone();
-                let fetch_users = fetch_users.clone();
+                let fetch_data = fetch_data.clone();
                 let message = message.clone();
                 let error = error.clone();
                 let i18n = i18n.clone();
@@ -167,7 +239,7 @@ pub fn admin() -> Html {
                         Ok(_) => {
                             message.set(Some(i18n.t("admin.password_reset")));
                             action.set(AdminAction::None);
-                            fetch_users.emit(());
+                            fetch_data.emit(());
                         }
                         Err(e) => error.set(Some(e)),
                     }
@@ -179,7 +251,7 @@ pub fn admin() -> Html {
     let on_confirm_delete = {
         let admin_id = current_user.id.clone();
         let action = action.clone();
-        let fetch_users = fetch_users.clone();
+        let fetch_data = fetch_data.clone();
         let message = message.clone();
         let error = error.clone();
         let i18n = i18n.clone();
@@ -189,7 +261,7 @@ pub fn admin() -> Html {
                 let admin_id = admin_id.clone();
                 let user_id = user.id.clone();
                 let action = action.clone();
-                let fetch_users = fetch_users.clone();
+                let fetch_data = fetch_data.clone();
                 let message = message.clone();
                 let error = error.clone();
                 let i18n = i18n.clone();
@@ -199,7 +271,7 @@ pub fn admin() -> Html {
                         Ok(_) => {
                             message.set(Some(i18n.t("admin.user_deleted")));
                             action.set(AdminAction::None);
-                            fetch_users.emit(());
+                            fetch_data.emit(());
                         }
                         Err(e) => error.set(Some(e)),
                     }
@@ -214,10 +286,32 @@ pub fn admin() -> Html {
     };
 
     html! {
-        <div class="max-w-6xl mx-auto p-4 min-h-screen bg-gray-50">
+        <div class="max-w-6xl mx-auto p-4 min-h-screen bg-gray-50 pb-20">
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-2xl font-bold text-gray-800">{i18n.t("admin.title")}</h1>
                 <button class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium" onclick={on_back}>{i18n.t("common.back")}</button>
+            </div>
+
+            // Tab Switcher
+            <div class="flex border-b border-gray-200 mb-6">
+                <button 
+                    onclick={let active_tab = active_tab.clone(); move |_| active_tab.set(AdminTab::Users)}
+                    class={classes!(
+                        "px-6", "py-2", "font-medium", "transition-colors", "border-b-2",
+                        if *active_tab == AdminTab::Users { "border-blue-600 text-blue-600" } else { "border-transparent text-gray-500 hover:text-gray-700" }
+                    )}
+                >
+                    {i18n.t("admin.users_list")}
+                </button>
+                <button 
+                    onclick={let active_tab = active_tab.clone(); move |_| active_tab.set(AdminTab::PendingProducts)}
+                    class={classes!(
+                        "px-6", "py-2", "font-medium", "transition-colors", "border-b-2",
+                        if *active_tab == AdminTab::PendingProducts { "border-blue-600 text-blue-600" } else { "border-transparent text-gray-500 hover:text-gray-700" }
+                    )}
+                >
+                    {i18n.t("admin.pending_products")}
+                </button>
             </div>
 
             if let Some(ref err) = *error {
@@ -229,98 +323,151 @@ pub fn admin() -> Html {
             }
 
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                <div class="p-4 border-b border-gray-100 bg-gray-50">
-                    <h2 class="font-semibold text-gray-700">{i18n.t("admin.users_list")}</h2>
-                </div>
-                
-                if *loading && users.is_empty() {
-                    <div class="p-8 text-center text-gray-500">{i18n.t("common.loading")}</div>
+                if *active_tab == AdminTab::Users {
+                    if *loading && users.is_empty() {
+                        <div class="p-8 text-center text-gray-500">{i18n.t("common.loading")}</div>
+                    } else {
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="text-xs uppercase text-gray-400 bg-gray-50">
+                                        <th class="p-4 font-medium">{i18n.t("login.username")}</th>
+                                        <th class="p-4 font-medium">{i18n.t("login.email")}</th>
+                                        <th class="p-4 font-medium">{i18n.t("admin.role_label")}</th>
+                                        <th class="p-4 font-medium text-right">{i18n.t("admin.actions")}</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    {for users.iter().map(|user| {
+                                        let user_clone = user.clone();
+                                        let is_current = user.id == current_user.id;
+                                        
+                                        let on_edit = {
+                                            let action = action.clone();
+                                            let edit_username = edit_username.clone();
+                                            let edit_email = edit_email.clone();
+                                            let user = user_clone.clone();
+                                            Callback::from(move |_| {
+                                                edit_username.set(user.username.clone());
+                                                edit_email.set(user.email.clone());
+                                                action.set(AdminAction::Edit(user.clone()));
+                                            })
+                                        };
+
+                                        let on_reset = {
+                                            let action = action.clone();
+                                            let reset_password_val = reset_password_val.clone();
+                                            let user = user_clone.clone();
+                                            Callback::from(move |_| {
+                                                reset_password_val.set(String::new());
+                                                action.set(AdminAction::ResetPassword(user.clone()));
+                                            })
+                                        };
+
+                                        let on_delete = {
+                                            let action = action.clone();
+                                            let user = user_clone.clone();
+                                            Callback::from(move |_| action.set(AdminAction::Delete(user.clone())))
+                                        };
+
+                                        let on_toggle_role = {
+                                            let on_update_role = on_update_role.clone();
+                                            let user_id = user.id.clone();
+                                            let next_role = if user.role == "admin" { "user" } else { "admin" };
+                                            Callback::from(move |_| on_update_role.emit((user_id.clone(), next_role.to_string())))
+                                        };
+
+                                        html! {
+                                            <tr class="hover:bg-gray-50 transition-colors">
+                                                <td class="p-4 text-gray-900 font-medium">{&user.username}</td>
+                                                <td class="p-4 text-gray-600 text-sm">{&user.email}</td>
+                                                <td class="p-4">
+                                                    <button 
+                                                        onclick={on_toggle_role}
+                                                        disabled={is_current}
+                                                        class={classes!(
+                                                            "px-2", "py-1", "rounded-full", "text-xs", "font-medium", "transition-colors",
+                                                            if user.role == "admin" { "bg-purple-100 text-purple-700 hover:bg-purple-200" } else { "bg-blue-100 text-blue-700 hover:bg-blue-200" }
+                                                        )}
+                                                    >
+                                                        {if user.role == "admin" { i18n.t("admin.admin_role") } else { i18n.t("admin.user_role") }}
+                                                    </button>
+                                                </td>
+                                                <td class="p-4 text-right space-x-2">
+                                                    if !is_current {
+                                                        <button onclick={on_edit} class="text-xs font-medium px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition">
+                                                            {i18n.t("admin.edit_user")}
+                                                        </button>
+                                                        <button onclick={on_reset} class="text-xs font-medium px-2 py-1 bg-yellow-50 text-yellow-700 rounded border border-yellow-100 hover:bg-yellow-100 transition">
+                                                            {i18n.t("admin.reset_password")}
+                                                        </button>
+                                                        <button onclick={on_delete} class="text-xs font-medium px-2 py-1 bg-red-50 text-red-700 rounded border border-red-100 hover:bg-red-100 transition">
+                                                            {i18n.t("admin.delete_user")}
+                                                        </button>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    }
                 } else {
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="text-xs uppercase text-gray-400 bg-gray-50">
-                                    <th class="p-4 font-medium">{i18n.t("login.username")}</th>
-                                    <th class="p-4 font-medium">{i18n.t("login.email")}</th>
-                                    <th class="p-4 font-medium">{i18n.t("admin.role_label")}</th>
-                                    <th class="p-4 font-medium text-right">{i18n.t("admin.actions")}</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100">
-                                {for users.iter().map(|user| {
-                                    let user_clone = user.clone();
-                                    let is_current = user.id == current_user.id;
-                                    
-                                    let on_edit = {
-                                        let action = action.clone();
-                                        let edit_username = edit_username.clone();
-                                        let edit_email = edit_email.clone();
-                                        let user = user_clone.clone();
-                                        Callback::from(move |_| {
-                                            edit_username.set(user.username.clone());
-                                            edit_email.set(user.email.clone());
-                                            action.set(AdminAction::Edit(user.clone()));
-                                        })
-                                    };
+                    if *loading && pending_products.is_empty() {
+                        <div class="p-8 text-center text-gray-500">{i18n.t("common.loading")}</div>
+                    } else if pending_products.is_empty() {
+                        <div class="p-12 text-center text-gray-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-4 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                            <p>{"No pending products to review"}</p>
+                        </div>
+                    } else {
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="text-xs uppercase text-gray-400 bg-gray-50">
+                                        <th class="p-4 font-medium">{"Barcode"}</th>
+                                        <th class="p-4 font-medium">{"Suggested Name"}</th>
+                                        <th class="p-4 font-medium">{"Added By"}</th>
+                                        <th class="p-4 font-medium text-right">{i18n.t("admin.actions")}</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    {for pending_products.iter().map(|product| {
+                                        let product_clone = product.clone();
+                                        let on_process_click = {
+                                            let action = action.clone();
+                                            let process_name = process_name.clone();
+                                            let process_brand = process_brand.clone();
+                                            let process_unit = process_unit.clone();
+                                            let p = product_clone.clone();
+                                            Callback::from(move |_| {
+                                                process_name.set(p.name.clone());
+                                                process_brand.set(p.brand.clone().unwrap_or_default());
+                                                process_unit.set(p.unit.clone().unwrap_or_else(|| "pcs".to_string()));
+                                                action.set(AdminAction::ProcessProduct(p.clone()));
+                                            })
+                                        };
 
-                                    let on_reset = {
-                                        let action = action.clone();
-                                        let reset_password_val = reset_password_val.clone();
-                                        let user = user_clone.clone();
-                                        Callback::from(move |_| {
-                                            reset_password_val.set(String::new());
-                                            action.set(AdminAction::ResetPassword(user.clone()));
-                                        })
-                                    };
-
-                                    let on_delete = {
-                                        let action = action.clone();
-                                        let user = user_clone.clone();
-                                        Callback::from(move |_| action.set(AdminAction::Delete(user.clone())))
-                                    };
-
-                                    let on_toggle_role = {
-                                        let on_update_role = on_update_role.clone();
-                                        let user_id = user.id.clone();
-                                        let next_role = if user.role == "admin" { "user" } else { "admin" };
-                                        Callback::from(move |_| on_update_role.emit((user_id.clone(), next_role.to_string())))
-                                    };
-
-                                    html! {
-                                        <tr class="hover:bg-gray-50 transition-colors">
-                                            <td class="p-4 text-gray-900 font-medium">{&user.username}</td>
-                                            <td class="p-4 text-gray-600 text-sm">{&user.email}</td>
-                                            <td class="p-4">
-                                                <button 
-                                                    onclick={on_toggle_role}
-                                                    disabled={is_current}
-                                                    class={classes!(
-                                                        "px-2", "py-1", "rounded-full", "text-xs", "font-medium", "transition-colors",
-                                                        if user.role == "admin" { "bg-purple-100 text-purple-700 hover:bg-purple-200" } else { "bg-blue-100 text-blue-700 hover:bg-blue-200" }
-                                                    )}
-                                                >
-                                                    {if user.role == "admin" { i18n.t("admin.admin_role") } else { i18n.t("admin.user_role") }}
-                                                </button>
-                                            </td>
-                                            <td class="p-4 text-right space-x-2">
-                                                if !is_current {
-                                                    <button onclick={on_edit} class="text-xs font-medium px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition">
-                                                        {i18n.t("admin.edit_user")}
+                                        html! {
+                                            <tr class="hover:bg-gray-50 transition-colors">
+                                                <td class="p-4 font-mono text-xs">{&product.barcode}</td>
+                                                <td class="p-4 text-gray-900 font-medium">{&product.name}</td>
+                                                <td class="p-4 text-gray-500 text-xs">{&product.added_by}</td>
+                                                <td class="p-4 text-right">
+                                                    <button onclick={on_process_click} class="text-xs font-medium px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                                                        {i18n.t("admin.process_product")}
                                                     </button>
-                                                    <button onclick={on_reset} class="text-xs font-medium px-2 py-1 bg-yellow-50 text-yellow-700 rounded border border-yellow-100 hover:bg-yellow-100 transition">
-                                                        {i18n.t("admin.reset_password")}
-                                                    </button>
-                                                    <button onclick={on_delete} class="text-xs font-medium px-2 py-1 bg-red-50 text-red-700 rounded border border-red-100 hover:bg-red-100 transition">
-                                                        {i18n.t("admin.delete_user")}
-                                                    </button>
-                                                }
-                                            </td>
-                                        </tr>
-                                    }
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    }
                 }
             </div>
 
@@ -365,6 +512,73 @@ pub fn admin() -> Html {
                                     </button>
                                 </div>
                             </form>
+                        </div>
+                    </div>
+                },
+                AdminAction::ProcessProduct(product) => html! {
+                    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                        <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
+                            <h3 class="text-xl font-bold mb-2">{i18n.t("admin.process_product")}</h3>
+                            <p class="text-sm text-gray-500 font-mono mb-6">{&product.barcode}</p>
+                            
+                            <div class="space-y-4 mb-8">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("barcode.product_name")}</label>
+                                    <input 
+                                        type="text" 
+                                        class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                                        value={(*process_name).clone()}
+                                        oninput={let process_name = process_name.clone(); Callback::from(move |e: InputEvent| {
+                                            let input: HtmlInputElement = e.target_unchecked_into();
+                                            process_name.set(input.value());
+                                        })}
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("barcode.product_brand")}</label>
+                                    <input 
+                                        type="text" 
+                                        class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                                        value={(*process_brand).clone()}
+                                        oninput={let process_brand = process_brand.clone(); Callback::from(move |e: InputEvent| {
+                                            let input: HtmlInputElement = e.target_unchecked_into();
+                                            process_brand.set(input.value());
+                                        })}
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("common.unit")}</label>
+                                    <select 
+                                        class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                                        value={(*process_unit).clone()}
+                                        onchange={let process_unit = process_unit.clone(); Callback::from(move |e: Event| {
+                                            let input: web_sys::HtmlSelectElement = e.target_unchecked_into();
+                                            process_unit.set(input.value());
+                                        })}
+                                    >
+                                        <option value="pcs">{"pcs"}</option>
+                                        <option value="kg">{"kg"}</option>
+                                        <option value="g">{"g"}</option>
+                                        <option value="l">{"l"}</option>
+                                        <option value="ml">{"ml"}</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick={let on_submit_process = on_submit_process.clone(); move |_| on_submit_process.emit("local".to_string())} class="py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition">
+                                    {i18n.t("admin.action_keep_local")}
+                                </button>
+                                <button onclick={let on_submit_process = on_submit_process.clone(); move |_| on_submit_process.emit("off".to_string())} class="py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition">
+                                    {i18n.t("admin.action_contribute")}
+                                </button>
+                                <button onclick={let on_submit_process = on_submit_process.clone(); move |_| on_submit_process.emit("discard".to_string())} class="py-2 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700 transition">
+                                    {i18n.t("admin.action_discard")}
+                                </button>
+                                <button type="button" onclick={let action = action.clone(); move |_| action.set(AdminAction::None)} class="py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition">
+                                    {i18n.t("common.cancel")}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 },

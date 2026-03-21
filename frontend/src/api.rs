@@ -271,6 +271,49 @@ pub async fn admin_delete_user(admin_id: &str, user_id: &str) -> Result<(), Stri
     fetch_delete(&url, None::<&()>).await
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BufferProductRequest {
+    pub barcode: String,
+    pub name: String,
+    pub brand: Option<String>,
+    pub unit: Option<String>,
+    pub added_by: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ProcessProductRequest {
+    pub action: String,
+    pub name: String,
+    pub brand: Option<String>,
+    pub unit: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct PendingProduct {
+    pub barcode: String,
+    pub name: String,
+    pub brand: Option<String>,
+    pub unit: Option<String>,
+    pub added_by: String,
+    pub status: String,
+    pub created_at: String,
+}
+
+pub async fn buffer_unknown_product(req: BufferProductRequest) -> Result<(), String> {
+    let url = format!("{}/products/buffer", get_api_base());
+    fetch_json(&url, Some(&req)).await
+}
+
+pub async fn list_pending_products(admin_id: &str) -> Result<Vec<PendingProduct>, String> {
+    let url = format!("{}/admin/pending-products?admin_id={}", get_api_base(), admin_id);
+    fetch_json(&url, None::<&()>).await
+}
+
+pub async fn process_pending_product(admin_id: &str, barcode: &str, req: ProcessProductRequest) -> Result<(), String> {
+    let url = format!("{}/admin/products/{}/process?admin_id={}", get_api_base(), barcode, admin_id);
+    fetch_json(&url, Some(&req)).await
+}
+
 pub async fn get_user_inventories(user_id: &str) -> Result<Vec<Inventory>, String> {
     let url = format!("{}/users/{}/inventories", get_api_base(), user_id);
     fetch_json(&url, None::<&()>).await

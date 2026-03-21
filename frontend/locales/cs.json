@@ -112,7 +112,10 @@
         "item_removed": "Položka byla úspěšně odebrána!",
         "no_img": "Bez obr.",
         "selected_product": "Vybraný produkt",
-        "barcode_placeholder": "EAN-13, UPC, atd."
+        "barcode_placeholder": "EAN-13, UPC, atd.",
+        "unknown_title": "Neznámý produkt",
+        "product_name": "Název produktu",
+        "product_brand": "Značka (volitelné)"
     },
     "custom_items": {
         "title": "Rychlé položky",
@@ -171,6 +174,12 @@
         "password_reset": "Heslo uživatele bylo úspěšně resetováno",
         "user_deleted": "Uživatel byl úspěšně smazán",
         "delete_confirm_title": "Smazat uživatele?",
-        "delete_confirm_desc": "Opravdu chcete smazat uživatele {name}? Tuto akci nelze vrátit zpět."
+        "delete_confirm_desc": "Opravdu chcete smazat uživatele {name}? Tuto akci nelze vrátit zpět.",
+        "pending_products": "Čekající produkty",
+        "process_product": "Zpracovat produkt",
+        "action_keep_local": "Ponechat lokálně",
+        "action_contribute": "Přispět do OFF",
+        "action_discard": "Zahodit",
+        "processed_success": "Produkt byl úspěšně zpracován"
     }
 }

@@ -174,3 +174,64 @@ pub struct NewCustomItemTemplate {
     pub name: String,
     pub default_unit: String,
 }
+
+// Custom Product Models (Official local recognized barcodes)
+#[derive(Queryable, Serialize, Deserialize, Clone)]
+pub struct CustomProduct {
+    pub barcode: String,
+    pub name: String,
+    pub brand: Option<String>,
+    pub image_url: Option<String>,
+    pub unit: Option<String>,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Insertable, Deserialize, Serialize)]
+#[diesel(table_name = crate::schema::custom_products)]
+pub struct NewCustomProduct {
+    pub barcode: String,
+    pub name: String,
+    pub brand: Option<String>,
+    pub image_url: Option<String>,
+    pub unit: Option<String>,
+}
+
+// Pending Product Models (Buffer for admin review)
+#[derive(Queryable, Serialize, Deserialize, Clone)]
+pub struct PendingProduct {
+    pub barcode: String,
+    pub name: String,
+    pub brand: Option<String>,
+    pub unit: Option<String>,
+    pub added_by: String,
+    pub status: String,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Insertable, Deserialize, Serialize)]
+#[diesel(table_name = crate::schema::pending_products)]
+pub struct NewPendingProduct {
+    pub barcode: String,
+    pub name: String,
+    pub brand: Option<String>,
+    pub unit: Option<String>,
+    pub added_by: String,
+    pub status: String,
+}
+
+#[derive(Deserialize)]
+pub struct BufferProductRequest {
+    pub barcode: String,
+    pub name: String,
+    pub brand: Option<String>,
+    pub unit: Option<String>,
+    pub added_by: String,
+}
+
+#[derive(Deserialize)]
+pub struct ProcessProductRequest {
+    pub action: String, // "local", "off", "discard"
+    pub name: String,
+    pub brand: Option<String>,
+    pub unit: Option<String>,
+}

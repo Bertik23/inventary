@@ -10,6 +10,17 @@ diesel::table! {
 }
 
 diesel::table! {
+    custom_products (barcode) {
+        barcode -> Text,
+        name -> Text,
+        brand -> Nullable<Text>,
+        image_url -> Nullable<Text>,
+        unit -> Nullable<Text>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     inventories (id) {
         id -> Text,
         name -> Text,
@@ -41,6 +52,18 @@ diesel::table! {
 }
 
 diesel::table! {
+    pending_products (barcode) {
+        barcode -> Text,
+        name -> Text,
+        brand -> Nullable<Text>,
+        unit -> Nullable<Text>,
+        added_by -> Text,
+        status -> Text,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     users (id) {
         id -> Text,
         username -> Text,
@@ -57,11 +80,14 @@ diesel::joinable!(inventories -> users (owner_id));
 diesel::joinable!(inventory_items -> inventories (inventory_id));
 diesel::joinable!(inventory_users -> inventories (inventory_id));
 diesel::joinable!(inventory_users -> users (user_id));
+diesel::joinable!(pending_products -> users (added_by));
 
 diesel::allow_tables_to_appear_in_same_query!(
     custom_item_templates,
+    custom_products,
     inventories,
     inventory_items,
     inventory_users,
+    pending_products,
     users,
 );

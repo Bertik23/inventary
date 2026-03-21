@@ -481,15 +481,60 @@ pub async fn get_item_by_barcode(
     let inv_id = query.get("inventory_id");
     
     let mut product = match openfoodfacts::get_product_by_barcode(&barcode_val).await {
-        Ok(p) => p,
-        Err(_) => return Ok(HttpResponse::NotFound().json(serde_json::json!({
+        Ok(p) => Some(p),
+        Err(_) => None,
+    };
+
+    let mut conn = pool.get().expect("Failed to get DB connection");
+
+    if product.is_none() {
+        // Fallback 1: Check custom_products
+        use crate::schema::custom_products::dsl::*;
+        let custom = custom_products
+            .filter(barcode.eq(&barcode_val))
+            .first::<CustomProduct>(&mut conn)
+            .ok();
+            
+        if let Some(cp) = custom {
+            product = Some(ProductInfo {
+                id: None,
+                barcode: Some(cp.barcode),
+                name: cp.name,
+                image_url: cp.image_url,
+                brand: cp.brand,
+                categories: vec![],
+                unit: cp.unit,
+            });
+        } else {
+            // Fallback 2: Check pending_products
+            use crate::schema::pending_products::dsl::*;
+            let pending = pending_products
+                .filter(barcode.eq(&barcode_val))
+                .first::<PendingProduct>(&mut conn)
+                .ok();
+                
+            if let Some(pp) = pending {
+                product = Some(ProductInfo {
+                    id: None,
+                    barcode: Some(pp.barcode),
+                    name: pp.name,
+                    image_url: None,
+                    brand: pp.brand,
+                    categories: vec![],
+                    unit: pp.unit,
+                });
+            }
+        }
+    }
+
+    let mut product = match product {
+        Some(p) => p,
+        None => return Ok(HttpResponse::NotFound().json(serde_json::json!({
             "error": "Product not found"
         })))
     };
 
     if let Some(inventory_id_param) = inv_id {
-        let mut conn = pool.get().expect("Failed to get DB connection");
-        
         // Check existing items
         use crate::schema::inventory_items::dsl as ii;
         let existing = ii::inventory_items
@@ -885,6 +930,126 @@ pub async fn admin_reset_password(
         .execute(&mut conn)
         .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
         
+    Ok(HttpResponse::Ok().finish())
+}
+
+#[actix_web::post("/api/products/buffer")]
+pub async fn buffer_unknown_product(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    req: web::Json<BufferProductRequest>,
+) -> Result<HttpResponse> {
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    let new_pending = NewPendingProduct {
+        barcode: req.barcode.clone(),
+        name: req.name.clone(),
+        brand: req.brand.clone(),
+        unit: req.unit.clone(),
+        added_by: req.added_by.clone(),
+        status: "pending".to_string(),
+    };
+    
+    diesel::insert_into(crate::schema::pending_products::table)
+        .values(&new_pending)
+        .execute(&mut conn)
+        .map_err(|e| {
+            eprintln!("Error buffering product: {:?}", e);
+            actix_web::error::ErrorInternalServerError("Failed to buffer product (likely already pending)")
+        })?;
+        
+    Ok(HttpResponse::Created().json(new_pending))
+}
+
+#[actix_web::get("/api/admin/pending-products")]
+pub async fn list_pending_products(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> Result<HttpResponse> {
+    let admin_id = query.get("admin_id")
+        .ok_or_else(|| actix_web::error::ErrorBadRequest("admin_id required"))?;
+        
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    use crate::schema::users::dsl::*;
+    let requester = users.find(admin_id)
+        .first::<User>(&mut conn)
+        .map_err(|_| actix_web::error::ErrorUnauthorized("Unauthorized"))?;
+        
+    if requester.role != "admin" {
+        return Err(actix_web::error::ErrorForbidden("Admin access required"));
+    }
+    
+    use crate::schema::pending_products::dsl::*;
+    let pending = pending_products
+        .filter(status.eq("pending"))
+        .load::<PendingProduct>(&mut conn)
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        
+    Ok(HttpResponse::Ok().json(pending))
+}
+
+#[actix_web::post("/api/admin/products/{barcode}/process")]
+pub async fn process_pending_product(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+    req: web::Json<ProcessProductRequest>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> Result<HttpResponse> {
+    let barcode_param = path.into_inner();
+    let admin_id = query.get("admin_id")
+        .ok_or_else(|| actix_web::error::ErrorBadRequest("admin_id required"))?;
+        
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    use crate::schema::users::dsl::*;
+    let requester = users.find(admin_id)
+        .first::<User>(&mut conn)
+        .map_err(|_| actix_web::error::ErrorUnauthorized("Unauthorized"))?;
+        
+    if requester.role != "admin" {
+        return Err(actix_web::error::ErrorForbidden("Admin access required"));
+    }
+    
+    match req.action.as_str() {
+        "local" => {
+            let new_custom = NewCustomProduct {
+                barcode: barcode_param.clone(),
+                name: req.name.clone(),
+                brand: req.brand.clone(),
+                image_url: None,
+                unit: req.unit.clone(),
+            };
+            
+            diesel::insert_into(crate::schema::custom_products::table)
+                .values(&new_custom)
+                .execute(&mut conn)
+                .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+                
+            use crate::schema::pending_products::dsl::*;
+            diesel::update(pending_products.find(&barcode_param))
+                .set(status.eq("processed"))
+                .execute(&mut conn)
+                .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        }
+        "off" => {
+            // Future integration: call OFF API here
+            // For now, treat same as local but maybe mark differently
+            use crate::schema::pending_products::dsl::*;
+            diesel::update(pending_products.find(&barcode_param))
+                .set(status.eq("contributed"))
+                .execute(&mut conn)
+                .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        }
+        "discard" => {
+            use crate::schema::pending_products::dsl::*;
+            diesel::update(pending_products.find(&barcode_param))
+                .set(status.eq("discarded"))
+                .execute(&mut conn)
+                .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        }
+        _ => return Ok(HttpResponse::BadRequest().json(serde_json::json!({"error": "Invalid action"}))),
+    }
+    
     Ok(HttpResponse::Ok().finish())
 }
 

@@ -1,52 +1,56 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
 use crate::router::Route;
-use crate::api::{add_item, remove_item, search_products, search_inventory_items, get_product_by_barcode, AddItemRequest, RemoveItemRequest, ProductInfo};
-use crate::barcode::BarcodeScanner as BarcodeScannerImpl;
-use crate::app::InventoryContext;
+use crate::api::{add_item, remove_item, search_products, search_inventory_items, get_product_by_barcode, buffer_unknown_product, AddItemRequest, RemoveItemRequest, ProductInfo, BufferProductRequest};
+use crate::app::{InventoryContext, UserContext};
 use crate::i18n::use_i18n;
-
-fn format_quantity(q: f64) -> String {
-    let s = format!("{:.2}", q);
-    let s = s.strip_suffix(".00").unwrap_or(&s);
-    let s = s.strip_suffix("0").filter(|v| v.contains('.')).unwrap_or(s);
-    s.to_string()
-}
+use crate::barcode::BarcodeScanner as ScannerComponent;
+use web_sys::HtmlInputElement;
 
 #[derive(Properties, PartialEq)]
 pub struct Props {
-    pub mode: String,
+    pub mode: String, // "add" or "remove"
+}
+
+fn format_quantity(q: f64) -> String {
+    if q == q.round() {
+        format!("{:.0}", q)
+    } else {
+        format!("{:.1}", q)
+    }
 }
 
 #[function_component(BarcodeScanner)]
 pub fn barcode_scanner(props: &Props) -> Html {
-    let barcode_input = use_state(|| String::new());
-    let search_query = use_state(|| String::new());
-    let search_results = use_state(|| Vec::<ProductInfo>::new());
+    let inventory_context = use_context::<InventoryContext>().expect("InventoryContext not found");
+    let user_context = use_context::<UserContext>().expect("UserContext not found");
+    let inventory_id = (*inventory_context.inventory_id).clone().unwrap_or_default();
+    let navigator = use_navigator().unwrap();
+    let i18n = use_i18n();
+    
     let scanning = use_state(|| false);
+    let barcode_input = use_state(|| String::new());
     let selected_product = use_state(|| Option::<ProductInfo>::None);
     let quantity = use_state(|| 1.0);
     let selected_unit = use_state(|| "pcs".to_string());
-    let templates = use_state(|| Vec::<crate::api::CustomItemTemplate>::new());
     let loading = use_state(|| false);
     let message = use_state(|| Option::<String>::None);
-    let i18n = use_i18n();
     
-    let inventory_context = use_context::<InventoryContext>().expect("InventoryContext not found");
-    let navigator = use_navigator().unwrap();
+    let search_query = use_state(|| String::new());
+    let search_results = use_state(|| Vec::<ProductInfo>::new());
+    let templates = use_state(|| Vec::<crate::api::CustomItemTemplate>::new());
 
-    let inventory_id = match &*inventory_context.inventory_id {
-        Some(id) => id.clone(),
-        None => {
-            return html! { <div>{i18n.t("inventory.no_inventory_selected")}</div> };
-        }
-    };
+    // Unknown product states
+    let is_unknown = use_state(|| false);
+    let unknown_barcode = use_state(|| String::new());
+    let unknown_name = use_state(|| String::new());
+    let unknown_brand = use_state(|| String::new());
+    let unknown_unit = use_state(|| "pcs".to_string());
 
     {
         let templates = templates.clone();
         let inventory_id = inventory_id.clone();
-        use_effect_with((), move |_| {
-            let templates = templates.clone();
+        use_effect_with(inventory_id, move |inventory_id| {
             let inventory_id = inventory_id.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 match crate::api::get_custom_item_templates(Some(&inventory_id)).await {
@@ -111,7 +115,6 @@ pub fn barcode_scanner(props: &Props) -> Html {
         let scanning = scanning.clone();
         Callback::from(move |_| {
             scanning.set(true);
-            // Barcode scanning will be handled by the BarcodeScanner component
         })
     };
     
@@ -139,68 +142,48 @@ pub fn barcode_scanner(props: &Props) -> Html {
         let inventory_id = inventory_id.clone();
         let i18n = i18n.clone();
         
-        Callback::from({
-            let selected = selected.clone();
-            let quantity = quantity.clone();
-            let selected_unit = selected_unit.clone();
-            let loading = loading.clone();
-            let message = message.clone();
-            let navigator = navigator.clone();
-            let mode = mode.clone();
-            let inventory_id = inventory_id.clone();
-            let i18n = i18n.clone();
-            move |_| {
-                let product = match selected.as_ref() {
-                    Some(p) => p.clone(),
-                    None => {
-                        message.set(Some(i18n.t("barcode.select_product")));
-                        return;
-                    }
-                };
-                
+        Callback::from(move |_| {
+            if let Some(ref product) = *selected {
                 loading.set(true);
-                let mode = mode.clone();
-                let navigator = navigator.clone();
-                let message = message.clone();
+                let req_inventory_id = inventory_id.clone();
+                let barcode = product.barcode.clone();
+                let name = Some(product.name.clone());
+                let qty = Some(*quantity);
+                let unit = Some((*selected_unit).clone());
+                
                 let loading = loading.clone();
-                let qty = *quantity;
-                let unit = (*selected_unit).clone();
-                let inventory_id = inventory_id.clone();
+                let message = message.clone();
+                let navigator = navigator.clone();
+                let mode = mode.clone();
                 let i18n = i18n.clone();
+                let product_id = product.id.clone();
                 
                 wasm_bindgen_futures::spawn_local(async move {
                     let result = if mode == "add" {
                         add_item(AddItemRequest {
-                            inventory_id: inventory_id,
-                            barcode: product.barcode.clone(),
-                            name: Some(product.name.clone()),
-                            quantity: Some(qty),
-                            unit: Some(unit),
+                            inventory_id: req_inventory_id,
+                            barcode,
+                            name,
+                            quantity: qty,
+                            unit,
                         }).await
                     } else {
                         remove_item(RemoveItemRequest {
-                            inventory_id: inventory_id,
-                            barcode: product.barcode.clone(),
-                            id: product.id.clone(),
-                            name: Some(product.name.clone()),
-                            quantity: Some(qty),
+                            inventory_id: req_inventory_id,
+                            barcode,
+                            id: product_id,
+                            name,
+                            quantity: qty,
                         }).await
                     };
                     
                     loading.set(false);
                     match result {
                         Ok(_) => {
-                            message.set(Some(if mode == "add" {
-                                i18n.t("barcode.item_added")
-                            } else {
-                                i18n.t("barcode.item_removed")
-                            }));
-                            // Navigate back after a delay
-                            let navigator = navigator.clone();
-                            wasm_bindgen_futures::spawn_local(async move {
-                                gloo_timers::future::TimeoutFuture::new(1500).await;
-                                navigator.push(&Route::MainMenu);
-                            });
+                            let msg = if mode == "add" { i18n.t("barcode.item_added") } else { i18n.t("barcode.item_removed") };
+                            message.set(Some(msg));
+                            gloo_timers::future::TimeoutFuture::new(1500).await;
+                            navigator.push(&Route::MainMenu);
                         }
                         Err(e) => {
                             message.set(Some(i18n.t_with("common.error", vec![("e", &e)])));
@@ -210,71 +193,128 @@ pub fn barcode_scanner(props: &Props) -> Html {
             }
         })
     };
+
+    let on_submit_unknown = {
+        let is_unknown = is_unknown.clone();
+        let unknown_barcode = unknown_barcode.clone();
+        let unknown_name = unknown_name.clone();
+        let unknown_brand = unknown_brand.clone();
+        let unknown_unit = unknown_unit.clone();
+        let loading = loading.clone();
+        let message = message.clone();
+        let navigator = navigator.clone();
+        let inventory_id = inventory_id.clone();
+        let user_id = match &*user_context.user {
+            Some(u) => u.id.clone(),
+            None => String::new(),
+        };
+        let i18n = i18n.clone();
+
+        Callback::from(move |_| {
+            let barcode = (*unknown_barcode).clone();
+            let name = (*unknown_name).clone();
+            let brand = (*unknown_brand).clone();
+            let unit = (*unknown_unit).clone();
+            
+            if name.is_empty() {
+                return;
+            }
+
+            loading.set(true);
+            let inv_id = inventory_id.clone();
+            let user_id = user_id.clone();
+            let loading = loading.clone();
+            let message = message.clone();
+            let navigator = navigator.clone();
+            let i18n = i18n.clone();
+
+            wasm_bindgen_futures::spawn_local(async move {
+                // 1. Buffer the product
+                let buffer_req = BufferProductRequest {
+                    barcode: barcode.clone(),
+                    name: name.clone(),
+                    brand: if brand.is_empty() { None } else { Some(brand.clone()) },
+                    unit: Some(unit.clone()),
+                    added_by: user_id,
+                };
+                let _ = buffer_unknown_product(buffer_req).await;
+
+                // 2. Add to inventory
+                let add_req = AddItemRequest {
+                    inventory_id: inv_id,
+                    barcode: Some(barcode),
+                    name: Some(name),
+                    quantity: Some(1.0),
+                    unit: Some(unit),
+                };
+                match add_item(add_req).await {
+                    Ok(_) => {
+                        message.set(Some(i18n.t("barcode.item_added")));
+                        gloo_timers::future::TimeoutFuture::new(1500).await;
+                        navigator.push(&Route::MainMenu);
+                    }
+                    Err(e) => {
+                        message.set(Some(i18n.t_with("common.error", vec![("e", &e)])));
+                        loading.set(false);
+                    }
+                }
+            });
+        })
+    };
     
-    // Function to lookup product by barcode
     let lookup_by_barcode = {
         let selected = selected_product.clone();
         let loading = loading.clone();
         let message = message.clone();
         let barcode_input = barcode_input.clone();
         let selected_unit = selected_unit.clone();
+        let is_unknown = is_unknown.clone();
+        let unknown_barcode = unknown_barcode.clone();
+        let unknown_name = unknown_name.clone();
+        let inventory_id = inventory_id.clone();
         let i18n = i18n.clone();
         
-        Callback::from({
+        Callback::from(move |barcode: String| {
+            if barcode.trim().is_empty() {
+                message.set(Some(i18n.t("barcode.enter_barcode")));
+                return;
+            }
+            
+            loading.set(true);
+            message.set(None);
             let selected = selected.clone();
             let loading = loading.clone();
             let message = message.clone();
             let barcode_input = barcode_input.clone();
+            let barcode_trimmed = barcode.trim().to_string();
+            let inv_id = inventory_id.clone();
             let selected_unit = selected_unit.clone();
-            let inventory_id = inventory_id.clone();
+            let is_unknown = is_unknown.clone();
+            let unknown_barcode = unknown_barcode.clone();
+            let unknown_name = unknown_name.clone();
             let i18n = i18n.clone();
-            move |barcode: String| {
-                if barcode.trim().is_empty() {
-                    message.set(Some(i18n.t("barcode.enter_barcode")));
-                    return;
-                }
-                
-                loading.set(true);
-                message.set(None);
-                let selected = selected.clone();
-                let loading = loading.clone();
-                let message = message.clone();
-                let barcode_input = barcode_input.clone();
-                let barcode_trimmed = barcode.trim().to_string();
-                let inventory_id = inventory_id.clone();
-                let selected_unit = selected_unit.clone();
-                let i18n = i18n.clone();
-                
-                wasm_bindgen_futures::spawn_local(async move {
-                    match get_product_by_barcode(&barcode_trimmed, Some(&inventory_id)).await {
-                        Ok(product) => {
-                            if let Some(ref u) = product.unit {
-                                selected_unit.set(u.clone());
-                            } else {
-                                selected_unit.set("pcs".to_string());
-                            }
-                            selected.set(Some(product));
-                            loading.set(false);
-                            barcode_input.set(String::new()); // Clear input on success
+            
+            wasm_bindgen_futures::spawn_local(async move {
+                match get_product_by_barcode(&barcode_trimmed, Some(&inv_id)).await {
+                    Ok(product) => {
+                        if let Some(ref u) = product.unit {
+                            selected_unit.set(u.clone());
+                        } else {
+                            selected_unit.set("pcs".to_string());
                         }
-                        Err(e) => {
-                            message.set(Some(i18n.t_with("barcode.product_not_found", vec![("e", &e)])));
-                            loading.set(false);
-                        }
-
+                        selected.set(Some(product));
+                        loading.set(false);
+                        barcode_input.set(String::new());
                     }
-                });
-            }
-        })
-    };
-    
-    let on_barcode_input_submit = {
-        let barcode_input = barcode_input.clone();
-        let lookup = lookup_by_barcode.clone();
-        
-        Callback::from(move |_| {
-            let barcode = (*barcode_input).clone();
-            lookup.emit(barcode);
+                    Err(_) => {
+                        // Product not found - show unknown form
+                        unknown_barcode.set(barcode_trimmed);
+                        unknown_name.set(String::new());
+                        is_unknown.set(true);
+                        loading.set(false);
+                    }
+                }
+            });
         })
     };
     
@@ -303,23 +343,54 @@ pub fn barcode_scanner(props: &Props) -> Html {
     
     let on_close_selection = {
         let selected = selected_product.clone();
+        let is_unknown = is_unknown.clone();
         Callback::from(move |_| {
             selected.set(None);
+            is_unknown.set(false);
         })
     };
-    
+
     html! {
-        <div class="max-w-lg mx-auto p-4 pb-32 min-h-screen bg-gray-50">
+        <div class="max-w-lg mx-auto p-4 min-h-screen bg-gray-50 pb-32">
             <div class="flex justify-between items-center mb-6">
-                <h1 class="text-2xl font-bold text-gray-800">{if props.mode == "add" { i18n.t("main_menu.add_item") } else { i18n.t("main_menu.remove_item") }}</h1>
+                <h1 class="text-2xl font-bold text-gray-800">
+                    {if props.mode == "add" { i18n.t("main_menu.add_item") } else { i18n.t("main_menu.remove_item") }}
+                </h1>
                 <button class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium" onclick={on_back}>{i18n.t("common.back")}</button>
             </div>
-            
+
             if let Some(ref msg) = *message {
-                <div class="mb-4 p-4 bg-blue-100 text-blue-800 rounded-xl shadow-sm border border-blue-200">{msg}</div>
+                <div class="mb-4 p-4 bg-blue-100 text-blue-800 rounded-xl border border-blue-200">{msg}</div>
             }
-            
-            <div class="mb-6 bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6">
+                <h2 class="text-lg font-semibold mb-3 text-gray-700">{i18n.t("barcode.scan_barcode")}</h2>
+                
+                if *scanning {
+                    <div class="relative rounded-xl overflow-hidden bg-black aspect-square mb-4">
+                        <ScannerComponent on_scan={on_barcode_scanned} />
+                        <button 
+                            class="absolute bottom-4 left-1/2 -translate-x-1/2 px-6 py-2 bg-red-600 text-white rounded-full font-medium shadow-lg"
+                            onclick={let scanning = scanning.clone(); move |_| scanning.set(false)}
+                        >
+                            {i18n.t("barcode.stop_scanning")}
+                        </button>
+                    </div>
+                } else {
+                    <button 
+                        class="w-full py-12 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-500 hover:border-blue-500 hover:text-blue-600 transition group bg-gray-50"
+                        onclick={on_start_scan}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mb-2 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span class="font-medium">{i18n.t("barcode.start_camera")}</span>
+                    </button>
+                }
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6">
                 <h2 class="text-lg font-semibold mb-3 text-gray-700">{i18n.t("barcode.enter_barcode")}</h2>
                 <div class="flex gap-2">
                     <input
@@ -330,72 +401,19 @@ pub fn barcode_scanner(props: &Props) -> Html {
                         oninput={Callback::from({
                             let barcode_input = barcode_input.clone();
                             move |e: InputEvent| {
-                                let input: web_sys::HtmlInputElement = e.target_unchecked_into();
+                                let input: HtmlInputElement = e.target_unchecked_into();
                                 barcode_input.set(input.value());
                             }
                         })}
-                        onkeypress={on_barcode_input_keypress.clone()}
-                        disabled={*loading}
+                        onkeypress={on_barcode_input_keypress}
                     />
-                    <button class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium shadow-sm" onclick={on_barcode_input_submit.clone()} disabled={*loading || barcode_input.trim().is_empty()}>
+                    <button 
+                        class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm"
+                        onclick={let barcode_input = barcode_input.clone(); let lookup = lookup_by_barcode.clone(); move |_| lookup.emit((*barcode_input).clone())}
+                        disabled={*loading}
+                    >
                         {i18n.t("barcode.lookup")}
                     </button>
-                </div>
-            </div>
-            
-            <div class="mb-6 bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-                <h2 class="text-lg font-semibold mb-3 text-gray-700">{i18n.t("barcode.scan_barcode")}</h2>
-                
-                if !*scanning {
-                    <button class="w-full py-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition flex items-center justify-center gap-2 font-medium shadow-sm" onclick={on_start_scan} disabled={*loading}>
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                        </svg>
-                        {i18n.t("barcode.start_camera")}
-                    </button>
-                }
-                
-                if *scanning {
-                    <div class="relative rounded-xl overflow-hidden bg-black aspect-[4/3] shadow-inner ring-4 ring-indigo-50">
-                        <BarcodeScannerImpl on_scan={on_barcode_scanned.clone()} />
-                        <button class="absolute top-3 right-3 bg-white/20 hover:bg-white/40 backdrop-blur-md p-2 rounded-full text-white transition" onclick={Callback::from(move |_| scanning.set(false))}>
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </div>
-                }
-            </div>
-            
-            <div class="mb-6">
-                <h2 class="text-lg font-semibold mb-3 text-gray-700">{i18n.t("barcode.quick_add")}</h2>
-                <div class="flex flex-wrap gap-2">
-                    {for templates.iter().map(|template| {
-                        let template = template.clone();
-                        let on_product_select = on_product_select.clone();
-                        let selected_unit = selected_unit.clone();
-                        let quantity = quantity.clone();
-                        let template_name = template.name.clone();
-                        html! {
-                            <button 
-                                class="px-4 py-2 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:text-blue-600 transition shadow-sm text-sm font-medium"
-                                onclick={Callback::from(move |_| {
-                                    on_product_select.emit(ProductInfo {
-                                        id: None,
-                                        barcode: None,
-                                        name: template.name.clone(),
-                                        image_url: None,
-                                        brand: None,
-                                        categories: vec![],
-                                        unit: Some(template.default_unit.clone()),
-                                    });
-                                    quantity.set(1.0);
-                                })}
-                            >
-                                {template_name}
-                            </button>
-                        }
-                    })}
                 </div>
             </div>
 
@@ -410,31 +428,23 @@ pub fn barcode_scanner(props: &Props) -> Html {
                         oninput={Callback::from({
                             let search_query = search_query.clone();
                             move |e: InputEvent| {
-                                let input: web_sys::HtmlInputElement = e.target_unchecked_into();
+                                let input: HtmlInputElement = e.target_unchecked_into();
                                 search_query.set(input.value());
                             }
                         })}
-                        onkeypress={Callback::from({
-                            let on_search = on_search.clone();
-                            move |e: KeyboardEvent| {
-                                if e.key() == "Enter" {
-                                    e.prevent_default();
-                                    on_search.emit(());
-                                }
-                            }
-                        })}
+                        onkeypress={let on_search = on_search.clone(); move |e: KeyboardEvent| if e.key() == "Enter" { on_search.emit(()); }}
                     />
-                    <button class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition font-medium shadow-sm" onclick={Callback::from(move |_| on_search.emit(()))} disabled={*loading}>
+                    <button 
+                        class="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium shadow-sm"
+                        onclick={let on_search = on_search.clone(); move |_| on_search.emit(())}
+                        disabled={*loading}
+                    >
                         {i18n.t("barcode.search")}
                     </button>
                 </div>
-                
-                if *loading {
-                    <div class="flex justify-center p-8">
-                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                    </div>
-                } else if !search_results.is_empty() {
-                    <div class="space-y-3">
+
+                if !search_results.is_empty() {
+                    <div class="space-y-2 mb-6">
                         {for search_results.iter().map(|product| {
                             let product_clone = product.clone();
                             let on_select = on_product_select.clone();
@@ -442,11 +452,12 @@ pub fn barcode_scanner(props: &Props) -> Html {
                             let product_brand = product.brand.clone();
                             let product_barcode = product.barcode.clone();
                             let product_image = product.image_url.clone();
+                            
                             html! {
-                                <div
+                                <div 
                                     class={classes!(
-                                        "flex", "items-center", "gap-4", "p-3", "rounded-xl", "border", "cursor-pointer", "transition", "hover:shadow-md", "bg-white",
-                                        if selected_product.as_ref().map(|p| p.barcode == product.barcode).unwrap_or(false) {
+                                        "flex", "items-center", "gap-4", "p-3", "bg-white", "border", "rounded-xl", "cursor-pointer", "transition-all", "active:scale-95",
+                                        if selected_product.as_ref().map(|p| p.barcode.as_ref()) == Some(product.barcode.as_ref()) {
                                             "border-blue-500 ring-2 ring-blue-100"
                                         } else {
                                             "border-gray-200 hover:border-blue-300"
@@ -486,7 +497,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
                     <div class="max-w-lg mx-auto">
                         <div class="flex justify-between items-start mb-4">
                             <h3 class="font-semibold text-gray-800">{i18n.t("barcode.selected_product")}</h3>
-                            <button class="text-gray-400 hover:text-gray-600" onclick={on_close_selection}>
+                            <button class="text-gray-400 hover:text-gray-600" onclick={on_close_selection.clone()}>
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                     <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
                                 </svg>
@@ -511,7 +522,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
                                                 oninput={Callback::from({
                                                     let quantity = quantity.clone();
                                                     move |e: InputEvent| {
-                                                        let input: web_sys::HtmlInputElement = e.target_unchecked_into();
+                                                        let input: HtmlInputElement = e.target_unchecked_into();
                                                         if let Ok(qty) = input.value().parse::<f64>() {
                                                             quantity.set(qty);
                                                         }
@@ -561,6 +572,75 @@ pub fn barcode_scanner(props: &Props) -> Html {
                         } else {
                             html! {}
                         }}
+                    </div>
+                </div>
+            }
+
+            if *is_unknown {
+                <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+                        <h3 class="text-xl font-bold mb-4">{i18n.t("barcode.unknown_title")}</h3>
+                        <div class="space-y-4">
+                            <p class="text-sm text-gray-500 font-mono bg-gray-50 p-2 rounded">{&*unknown_barcode}</p>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("barcode.product_name")}</label>
+                                <input 
+                                    type="text" 
+                                    class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                                    value={(*unknown_name).clone()}
+                                    oninput={let unknown_name = unknown_name.clone(); Callback::from(move |e: InputEvent| {
+                                        let input: HtmlInputElement = e.target_unchecked_into();
+                                        unknown_name.set(input.value());
+                                    })}
+                                    placeholder={i18n.t("barcode.product_name")}
+                                />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("barcode.product_brand")}</label>
+                                <input 
+                                    type="text" 
+                                    class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                                    value={(*unknown_brand).clone()}
+                                    oninput={let unknown_brand = unknown_brand.clone(); Callback::from(move |e: InputEvent| {
+                                        let input: HtmlInputElement = e.target_unchecked_into();
+                                        unknown_brand.set(input.value());
+                                    })}
+                                    placeholder={i18n.t("barcode.product_brand")}
+                                />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("common.unit")}</label>
+                                <select 
+                                    class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                                    value={(*unknown_unit).clone()}
+                                    onchange={let unknown_unit = unknown_unit.clone(); Callback::from(move |e: Event| {
+                                        let input: web_sys::HtmlSelectElement = e.target_unchecked_into();
+                                        unknown_unit.set(input.value());
+                                    })}
+                                >
+                                    <option value="pcs">{"pcs"}</option>
+                                    <option value="kg">{"kg"}</option>
+                                    <option value="g">{"g"}</option>
+                                    <option value="l">{"l"}</option>
+                                    <option value="ml">{"ml"}</option>
+                                </select>
+                            </div>
+                            <div class="flex gap-2 pt-2">
+                                <button 
+                                    onclick={on_submit_unknown}
+                                    class="flex-1 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition"
+                                    disabled={(*unknown_name).is_empty() || *loading}
+                                >
+                                    {i18n.t("common.save")}
+                                </button>
+                                <button 
+                                    onclick={on_close_selection.clone()}
+                                    class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition"
+                                >
+                                    {i18n.t("common.cancel")}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             }
