@@ -3,6 +3,7 @@ use crate::api::{
 };
 use crate::app::{InventoryContext, UserContext};
 use crate::router::Route;
+use crate::i18n::use_i18n;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yew_router::prelude::*;
@@ -17,6 +18,7 @@ pub fn inventory_selection(_props: &Props) -> Html {
     let error = use_state(|| Option::<String>::None);
     let show_create = use_state(|| false);
     let new_inv_name = use_state(|| String::new());
+    let i18n = use_i18n();
 
     let user_context =
         use_context::<UserContext>().expect("UserContext not found");
@@ -28,7 +30,7 @@ pub fn inventory_selection(_props: &Props) -> Html {
         Some(user) => user.id.clone(),
         None => {
             // Or redirect to login
-            return html! { <div>{"Please log in"}</div> };
+            return html! { <div>{i18n.t("login.please_log_in")}</div> };
         }
     };
 
@@ -109,7 +111,7 @@ pub fn inventory_selection(_props: &Props) -> Html {
         <div class="min-h-screen bg-gray-50 p-4">
             <div class="max-w-md mx-auto">
                 <div class="flex justify-between items-center mb-6">
-                    <h1 class="text-2xl font-bold text-gray-900">{"My Inventories"}</h1>
+                    <h1 class="text-2xl font-bold text-gray-900">{i18n.t("inventory.selection_title")}</h1>
                     <button 
                         onclick={
                             let user_context = user_context.clone();
@@ -122,17 +124,17 @@ pub fn inventory_selection(_props: &Props) -> Html {
                             })
                         }
                         class="p-2 text-gray-500 hover:text-red-600 transition flex items-center gap-1 text-sm font-medium"
-                        title="Logout"
+                        title={i18n.t("main_menu.logout")}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                         </svg>
-                        {"Logout"}
+                        {i18n.t("main_menu.logout")}
                     </button>
                 </div>
 
                 if let Some(ref err) = *error {
-                    <div class="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">{err}</div>
+                    <div class="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">{i18n.t_with("common.error", vec![("e", err)])}</div>
                 }
 
                 if *loading {
@@ -146,6 +148,7 @@ pub fn inventory_selection(_props: &Props) -> Html {
                             let navigator = navigator.clone();
                             let id = inv.id.clone();
                             let name = inv.name.clone();
+                            let i18n = i18n.clone();
 
                             let on_select = {
                                 let id = id.clone();
@@ -167,8 +170,8 @@ pub fn inventory_selection(_props: &Props) -> Html {
                                 <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 transition flex justify-between items-center">
                                     <span class="font-medium text-gray-800">{&inv.name}</span>
                                     <div class="flex gap-2">
-                                        <button onclick={on_share} class="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">{"Share"}</button>
-                                        <button onclick={on_select} class="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700">{"Select"}</button>
+                                        <button onclick={on_share} class="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">{i18n.t("inventory.share")}</button>
+                                        <button onclick={on_select} class="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700">{i18n.t("inventory.switch")}</button>
                                     </div>
                                 </div>
                             }
@@ -176,11 +179,11 @@ pub fn inventory_selection(_props: &Props) -> Html {
 
                         if *show_create {
                             <form onsubmit={on_create} class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mt-4">
-                                <h3 class="font-medium text-gray-900 mb-3">{"New Inventory"}</h3>
+                                <h3 class="font-medium text-gray-900 mb-3">{i18n.t("inventory.create_new")}</h3>
                                 <input
                                     type="text"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mb-3"
-                                    placeholder="Inventory Name"
+                                    placeholder={i18n.t("inventory.name_placeholder")}
                                     value={(*new_inv_name).clone()}
                                     oninput={Callback::from(move |e: InputEvent| {
                                         let input: HtmlInputElement = e.target_unchecked_into();
@@ -188,13 +191,13 @@ pub fn inventory_selection(_props: &Props) -> Html {
                                     })}
                                 />
                                 <div class="flex gap-2">
-                                    <button type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">{"Create"}</button>
+                                    <button type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">{i18n.t("inventory.create_button")}</button>
                                     <button
                                         type="button"
                                         class="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg hover:bg-gray-200 transition"
                                         onclick={Callback::from(move |_| show_create.set(false))}
                                     >
-                                        {"Cancel"}
+                                        {i18n.t("common.cancel")}
                                     </button>
                                 </div>
                             </form>
@@ -206,7 +209,7 @@ pub fn inventory_selection(_props: &Props) -> Html {
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                     <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
                                 </svg>
-                                {"Create New Inventory"}
+                                {i18n.t("inventory.create_new")}
                             </button>
                         }
                     </div>

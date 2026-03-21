@@ -1,6 +1,7 @@
 use crate::api::{login_user, register_user, forgot_password, AuthRequest, ForgotPasswordRequest, get_api_base, set_api_base};
 use crate::app::UserContext;
 use crate::router::Route;
+use crate::i18n::use_i18n;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yew_router::prelude::*;
@@ -20,6 +21,7 @@ pub fn login(_props: &Props) -> Html {
     let loading = use_state(|| false);
     let is_registering = use_state(|| false);
     let is_forgot_password = use_state(|| false);
+    let i18n = use_i18n();
 
     let user_context =
         use_context::<UserContext>().expect("UserContext not found");
@@ -59,17 +61,17 @@ pub fn login(_props: &Props) -> Html {
 
             if *is_forgot_password {
                 if email_str.is_empty() {
-                    error.set(Some("Please enter your email".to_string()));
+                    error.set(Some(i18n.t("login.enter_email_error")));
                     return;
                 }
             } else if *is_registering {
                 if username_str.is_empty() || email_str.is_empty() || password_str.is_empty() {
-                    error.set(Some("Please fill in all fields".to_string()));
+                    error.set(Some(i18n.t("common.fill_all_fields")));
                     return;
                 }
             } else {
                 if username_str.is_empty() || password_str.is_empty() {
-                    error.set(Some("Please fill in all fields".to_string()));
+                    error.set(Some(i18n.t("common.fill_all_fields")));
                     return;
                 }
             }
@@ -93,7 +95,7 @@ pub fn login(_props: &Props) -> Html {
                 if is_forgot {
                     match forgot_password(ForgotPasswordRequest { email: email_str }).await {
                         Ok(_) => {
-                            message.set(Some("If that email exists in our system, a reset link has been sent.".to_string()));
+                            message.set(Some(i18n.t("login.reset_link_sent")));
                         }
                         Err(e) => error.set(Some(e)),
                     }
@@ -129,10 +131,10 @@ pub fn login(_props: &Props) -> Html {
                 <div class="flex justify-between items-start mb-8">
                     <div class="text-left">
                         <h1 class="text-2xl font-bold text-gray-900">
-                            {if *is_forgot_password { "Reset Password" } else if *is_registering { "Create Account" } else { "Welcome Back" }}
+                            {if *is_forgot_password { i18n.t("login.reset_password") } else if *is_registering { i18n.t("login.create_account") } else { i18n.t("login.welcome") }}
                         </h1>
                         <p class="text-gray-500 mt-2">
-                            {if *is_forgot_password { "Enter your email to receive a reset link" } else if *is_registering { "Sign up to manage your inventory" } else { "Sign in to your account" }}
+                            {if *is_forgot_password { i18n.t("login.reset_password_desc") } else if *is_registering { i18n.t("login.sign_up_desc") } else { i18n.t("login.sign_in_desc") }}
                         </p>
                     </div>
                     <button 
@@ -153,9 +155,9 @@ pub fn login(_props: &Props) -> Html {
 
                 if *show_settings {
                     <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100 space-y-3">
-                        <h3 class="text-sm font-semibold text-blue-800">{"Server Settings"}</h3>
+                        <h3 class="text-sm font-semibold text-blue-800">{i18n.t("login.server_settings")}</h3>
                         <div>
-                            <label class="block text-xs font-medium text-blue-700 mb-1">{"Backend API URL"}</label>
+                            <label class="block text-xs font-medium text-blue-700 mb-1">{i18n.t("login.backend_url")}</label>
                             <input
                                 type="text"
                                 class="w-full px-3 py-2 text-sm border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
@@ -185,7 +187,7 @@ pub fn login(_props: &Props) -> Html {
                 <form onsubmit={on_submit} class="space-y-4">
                     if !*is_forgot_password {
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">{"Username"}</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("login.username")}</label>
                             <input
                                 type="text"
                                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
@@ -200,7 +202,7 @@ pub fn login(_props: &Props) -> Html {
                     }
                     if *is_forgot_password || *is_registering {
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">{"Email"}</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("login.email")}</label>
                             <input
                                 type="email"
                                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
@@ -216,7 +218,7 @@ pub fn login(_props: &Props) -> Html {
                     if !*is_forgot_password {
                         <div>
                             <div class="flex justify-between items-center mb-1">
-                                <label class="block text-sm font-medium text-gray-700">{"Password"}</label>
+                                <label class="block text-sm font-medium text-gray-700">{i18n.t("login.password")}</label>
                                 if !*is_registering {
                                     <button 
                                         type="button"
@@ -232,7 +234,7 @@ pub fn login(_props: &Props) -> Html {
                                             })
                                         }
                                     >
-                                        {"Forgot password?"}
+                                        {i18n.t("login.forgot_password")}
                                     </button>
                                 }
                             </div>
@@ -254,7 +256,7 @@ pub fn login(_props: &Props) -> Html {
                         class="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
                         disabled={*loading}
                     >
-                        {if *loading { "Please wait..." } else if *is_forgot_password { "Send Reset Link" } else if *is_registering { "Sign Up" } else { "Sign In" }}
+                        {if *loading { i18n.t("common.loading") } else if *is_forgot_password { i18n.t("login.send_reset_link") } else if *is_registering { i18n.t("login.sign_up") } else { i18n.t("login.sign_in") }}
                     </button>
                 </form>
 
@@ -274,7 +276,7 @@ pub fn login(_props: &Props) -> Html {
                             }
                             disabled={*loading}
                         >
-                            {"Back to Sign In"}
+                            {i18n.t("login.back_to_sign_in")}
                         </button>
                     } else {
                         <button
@@ -291,7 +293,7 @@ pub fn login(_props: &Props) -> Html {
                             }
                             disabled={*loading}
                         >
-                            {if *is_registering { "Already have an account? Sign in" } else { "Don't have an account? Sign up" }}
+                            {if *is_registering { i18n.t("login.already_have_account") } else { i18n.t("login.no_account") }}
                         </button>
                     }
                 </div>

@@ -3,6 +3,7 @@ mod components;
 mod api;
 mod barcode;
 mod router;
+mod i18n;
 
 use wasm_bindgen::prelude::*;
 

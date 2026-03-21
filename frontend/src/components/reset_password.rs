@@ -1,5 +1,6 @@
 use crate::api::{reset_password, ResetPasswordRequest};
 use crate::router::Route;
+use crate::i18n::use_i18n;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yew_router::prelude::*;
@@ -14,6 +15,7 @@ pub fn reset_password_comp(_props: &Props) -> Html {
     let error = use_state(|| Option::<String>::None);
     let message = use_state(|| Option::<String>::None);
     let loading = use_state(|| false);
+    let i18n = use_i18n();
 
     let location = use_location().expect("Location not found");
     let token = location.query::<std::collections::HashMap<String, String>>()
@@ -38,17 +40,17 @@ pub fn reset_password_comp(_props: &Props) -> Html {
             let confirm_str = (*confirm_password).clone();
 
             if password_str.is_empty() || confirm_str.is_empty() {
-                error.set(Some("Please fill in all fields".to_string()));
+                error.set(Some(i18n.t("common.fill_all_fields")));
                 return;
             }
 
             if password_str != confirm_str {
-                error.set(Some("Passwords do not match".to_string()));
+                error.set(Some(i18n.t("login.passwords_dont_match")));
                 return;
             }
 
             if token.is_empty() {
-                error.set(Some("Invalid reset token".to_string()));
+                error.set(Some(i18n.t("login.invalid_reset_token")));
                 return;
             }
 
@@ -68,7 +70,7 @@ pub fn reset_password_comp(_props: &Props) -> Html {
             wasm_bindgen_futures::spawn_local(async move {
                 match reset_password(req).await {
                     Ok(_) => {
-                        message.set(Some("Password updated successfully. Redirecting to login...".to_string()));
+                        message.set(Some(i18n.t("login.password_updated")));
                         let navigator = navigator.clone();
                         gloo_timers::callback::Timeout::new(3000, move || {
                             navigator.push(&Route::Login);
@@ -85,8 +87,8 @@ pub fn reset_password_comp(_props: &Props) -> Html {
         <div class="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
             <div class="w-full max-w-md bg-white rounded-xl shadow-md p-8 border border-gray-100">
                 <div class="text-center mb-8">
-                    <h1 class="text-2xl font-bold text-gray-900">{"Set New Password"}</h1>
-                    <p class="text-gray-500 mt-2">{"Enter your new password below"}</p>
+                    <h1 class="text-2xl font-bold text-gray-900">{i18n.t("login.set_new_password")}</h1>
+                    <p class="text-gray-500 mt-2">{i18n.t("login.enter_new_password")}</p>
                 </div>
 
                 if let Some(ref err) = *error {
@@ -103,7 +105,7 @@ pub fn reset_password_comp(_props: &Props) -> Html {
 
                 <form onsubmit={on_submit} class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">{"New Password"}</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("login.new_password")}</label>
                         <input
                             type="password"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
@@ -116,7 +118,7 @@ pub fn reset_password_comp(_props: &Props) -> Html {
                         />
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">{"Confirm New Password"}</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("login.confirm_new_password")}</label>
                         <input
                             type="password"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
@@ -134,7 +136,7 @@ pub fn reset_password_comp(_props: &Props) -> Html {
                         class="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
                         disabled={*loading}
                     >
-                        {if *loading { "Updating..." } else { "Update Password" }}
+                        {if *loading { i18n.t("login.updating") } else { i18n.t("login.update_password") }}
                     </button>
                 </form>
             </div>

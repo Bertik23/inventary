@@ -4,6 +4,7 @@ use crate::router::Route;
 use crate::api::{add_item, remove_item, search_products, search_inventory_items, get_product_by_barcode, AddItemRequest, RemoveItemRequest, ProductInfo};
 use crate::barcode::BarcodeScanner as BarcodeScannerImpl;
 use crate::app::InventoryContext;
+use crate::i18n::use_i18n;
 
 fn format_quantity(q: f64) -> String {
     let s = format!("{:.2}", q);
@@ -29,6 +30,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
     let templates = use_state(|| Vec::<crate::api::CustomItemTemplate>::new());
     let loading = use_state(|| false);
     let message = use_state(|| Option::<String>::None);
+    let i18n = use_i18n();
     
     let inventory_context = use_context::<InventoryContext>().expect("InventoryContext not found");
     let navigator = use_navigator().unwrap();
@@ -36,7 +38,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
     let inventory_id = match &*inventory_context.inventory_id {
         Some(id) => id.clone(),
         None => {
-            return html! { <div>{"No inventory selected"}</div> };
+            return html! { <div>{i18n.t("inventory.no_inventory_selected")}</div> };
         }
     };
 
@@ -135,6 +137,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
         let navigator = navigator.clone();
         let mode = props.mode.clone();
         let inventory_id = inventory_id.clone();
+        let i18n = i18n.clone();
         
         Callback::from({
             let selected = selected.clone();
@@ -145,11 +148,12 @@ pub fn barcode_scanner(props: &Props) -> Html {
             let navigator = navigator.clone();
             let mode = mode.clone();
             let inventory_id = inventory_id.clone();
+            let i18n = i18n.clone();
             move |_| {
                 let product = match selected.as_ref() {
                     Some(p) => p.clone(),
                     None => {
-                        message.set(Some("Please select a product".to_string()));
+                        message.set(Some(i18n.t("barcode.select_product")));
                         return;
                     }
                 };
@@ -162,6 +166,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
                 let qty = *quantity;
                 let unit = (*selected_unit).clone();
                 let inventory_id = inventory_id.clone();
+                let i18n = i18n.clone();
                 
                 wasm_bindgen_futures::spawn_local(async move {
                     let result = if mode == "add" {
@@ -186,9 +191,9 @@ pub fn barcode_scanner(props: &Props) -> Html {
                     match result {
                         Ok(_) => {
                             message.set(Some(if mode == "add" {
-                                "Item added successfully!".to_string()
+                                i18n.t("barcode.item_added")
                             } else {
-                                "Item removed successfully!".to_string()
+                                i18n.t("barcode.item_removed")
                             }));
                             // Navigate back after a delay
                             let navigator = navigator.clone();
@@ -198,7 +203,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
                             });
                         }
                         Err(e) => {
-                            message.set(Some(format!("Error: {}", e)));
+                            message.set(Some(i18n.t_with("common.error", vec![("e", &e)])));
                         }
                     }
                 });
@@ -213,6 +218,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
         let message = message.clone();
         let barcode_input = barcode_input.clone();
         let selected_unit = selected_unit.clone();
+        let i18n = i18n.clone();
         
         Callback::from({
             let selected = selected.clone();
@@ -221,9 +227,10 @@ pub fn barcode_scanner(props: &Props) -> Html {
             let barcode_input = barcode_input.clone();
             let selected_unit = selected_unit.clone();
             let inventory_id = inventory_id.clone();
+            let i18n = i18n.clone();
             move |barcode: String| {
                 if barcode.trim().is_empty() {
-                    message.set(Some("Please enter a barcode".to_string()));
+                    message.set(Some(i18n.t("barcode.enter_barcode")));
                     return;
                 }
                 
@@ -236,6 +243,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
                 let barcode_trimmed = barcode.trim().to_string();
                 let inventory_id = inventory_id.clone();
                 let selected_unit = selected_unit.clone();
+                let i18n = i18n.clone();
                 
                 wasm_bindgen_futures::spawn_local(async move {
                     match get_product_by_barcode(&barcode_trimmed, Some(&inventory_id)).await {
@@ -250,9 +258,10 @@ pub fn barcode_scanner(props: &Props) -> Html {
                             barcode_input.set(String::new()); // Clear input on success
                         }
                         Err(e) => {
-                            message.set(Some(format!("Product not found: {}", e)));
+                            message.set(Some(i18n.t_with("barcode.product_not_found", vec![("e", &e)])));
                             loading.set(false);
                         }
+
                     }
                 });
             }
@@ -302,8 +311,8 @@ pub fn barcode_scanner(props: &Props) -> Html {
     html! {
         <div class="max-w-lg mx-auto p-4 pb-32 min-h-screen bg-gray-50">
             <div class="flex justify-between items-center mb-6">
-                <h1 class="text-2xl font-bold text-gray-800">{if props.mode == "add" { "Add Item" } else { "Remove Item" }}</h1>
-                <button class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium" onclick={on_back}>{"Back"}</button>
+                <h1 class="text-2xl font-bold text-gray-800">{if props.mode == "add" { i18n.t("main_menu.add_item") } else { i18n.t("main_menu.remove_item") }}</h1>
+                <button class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium" onclick={on_back}>{i18n.t("common.back")}</button>
             </div>
             
             if let Some(ref msg) = *message {
@@ -311,12 +320,12 @@ pub fn barcode_scanner(props: &Props) -> Html {
             }
             
             <div class="mb-6 bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-                <h2 class="text-lg font-semibold mb-3 text-gray-700">{"Enter Barcode"}</h2>
+                <h2 class="text-lg font-semibold mb-3 text-gray-700">{i18n.t("barcode.enter_barcode")}</h2>
                 <div class="flex gap-2">
                     <input
                         type="text"
                         class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition bg-gray-50"
-                        placeholder="EAN-13, UPC, etc."
+                        placeholder={i18n.t("barcode.barcode_placeholder")}
                         value={(*barcode_input).clone()}
                         oninput={Callback::from({
                             let barcode_input = barcode_input.clone();
@@ -329,20 +338,20 @@ pub fn barcode_scanner(props: &Props) -> Html {
                         disabled={*loading}
                     />
                     <button class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium shadow-sm" onclick={on_barcode_input_submit.clone()} disabled={*loading || barcode_input.trim().is_empty()}>
-                        {"Lookup"}
+                        {i18n.t("barcode.lookup")}
                     </button>
                 </div>
             </div>
             
             <div class="mb-6 bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-                <h2 class="text-lg font-semibold mb-3 text-gray-700">{"Or Scan Barcode"}</h2>
+                <h2 class="text-lg font-semibold mb-3 text-gray-700">{i18n.t("barcode.scan_barcode")}</h2>
                 
                 if !*scanning {
                     <button class="w-full py-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition flex items-center justify-center gap-2 font-medium shadow-sm" onclick={on_start_scan} disabled={*loading}>
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                         </svg>
-                        {"Start Camera"}
+                        {i18n.t("barcode.start_camera")}
                     </button>
                 }
                 
@@ -359,7 +368,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
             </div>
             
             <div class="mb-6">
-                <h2 class="text-lg font-semibold mb-3 text-gray-700">{"Quick Add (No Barcode)"}</h2>
+                <h2 class="text-lg font-semibold mb-3 text-gray-700">{i18n.t("barcode.quick_add")}</h2>
                 <div class="flex flex-wrap gap-2">
                     {for templates.iter().map(|template| {
                         let template = template.clone();
@@ -391,12 +400,12 @@ pub fn barcode_scanner(props: &Props) -> Html {
             </div>
 
             <div class="mb-6">
-                <h2 class="text-lg font-semibold mb-3 text-gray-700">{"Or Search by Name"}</h2>
+                <h2 class="text-lg font-semibold mb-3 text-gray-700">{i18n.t("barcode.search_by_name")}</h2>
                 <div class="flex gap-2 mb-4">
                     <input
                         type="text"
                         class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition bg-white shadow-sm"
-                        placeholder={if props.mode == "remove" { "Search inventory..." } else { "Search for product..." }}
+                        placeholder={if props.mode == "remove" { i18n.t("barcode.search_inventory") } else { i18n.t("barcode.search_product") }}
                         value={(*search_query).clone()}
                         oninput={Callback::from({
                             let search_query = search_query.clone();
@@ -416,7 +425,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
                         })}
                     />
                     <button class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition font-medium shadow-sm" onclick={Callback::from(move |_| on_search.emit(()))} disabled={*loading}>
-                        {"Search"}
+                        {i18n.t("barcode.search")}
                     </button>
                 </div>
                 
@@ -449,7 +458,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
                                         {if let Some(ref img) = product_image {
                                             html! { <img src={img.clone()} alt="Product" class="w-full h-full object-contain" /> }
                                         } else {
-                                            html! { <span class="text-gray-300 text-xs">{"No Img"}</span> }
+                                            html! { <span class="text-gray-300 text-xs">{i18n.t("barcode.no_img")}</span> }
                                         }}
                                     </div>
                                     <div class="flex-1 min-w-0">
@@ -476,7 +485,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
                 <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-50">
                     <div class="max-w-lg mx-auto">
                         <div class="flex justify-between items-start mb-4">
-                            <h3 class="font-semibold text-gray-800">{"Selected Product"}</h3>
+                            <h3 class="font-semibold text-gray-800">{i18n.t("barcode.selected_product")}</h3>
                             <button class="text-gray-400 hover:text-gray-600" onclick={on_close_selection}>
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                     <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
@@ -492,7 +501,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
                                     <p class="text-sm text-gray-600 truncate"><strong>{&product.name}</strong></p>
                                     <div class="flex flex-wrap items-center gap-4">
                                         <div class="flex items-center gap-2">
-                                            <span class="text-gray-700 font-medium">{"Qty:"}</span>
+                                            <span class="text-gray-700 font-medium">{i18n.t("common.qty_label")}</span>
                                             <input
                                                 type="number"
                                                 step="0.1"
@@ -511,7 +520,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
                                             />
                                         </div>
                                         <div class="flex items-center gap-2">
-                                            <span class="text-gray-700 font-medium">{"Unit:"}</span>
+                                            <span class="text-gray-700 font-medium">{i18n.t("common.unit")}</span>
                                             {if product.unit.is_some() {
                                                 html! { <span class="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg border border-gray-200 font-medium">{unit_val.clone()}</span> }
                                             } else {
@@ -527,11 +536,11 @@ pub fn barcode_scanner(props: &Props) -> Html {
                                                             }
                                                         })}
                                                     >
-                                                        <option value="pcs" selected={unit_val == "pcs"}>{"pcs"}</option>
-                                                        <option value="kg" selected={unit_val == "kg"}>{"kg"}</option>
-                                                        <option value="g" selected={unit_val == "g"}>{"g"}</option>
-                                                        <option value="l" selected={unit_val == "l"}>{"l"}</option>
-                                                        <option value="ml" selected={unit_val == "ml"}>{"ml"}</option>
+                                                        <option value="pcs" selected={unit_val == "pcs"}>{i18n.t("custom_items.unit_pcs")}</option>
+                                                        <option value="kg" selected={unit_val == "kg"}>{i18n.t("custom_items.unit_kg")}</option>
+                                                        <option value="g" selected={unit_val == "g"}>{i18n.t("custom_items.unit_g")}</option>
+                                                        <option value="l" selected={unit_val == "l"}>{i18n.t("custom_items.unit_l")}</option>
+                                                        <option value="ml" selected={unit_val == "ml"}>{i18n.t("custom_items.unit_ml")}</option>
                                                     </select>
                                                 }
                                             }}
@@ -544,7 +553,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
                                             onclick={on_submit} 
                                             disabled={*loading}
                                         >
-                                            {if props.mode == "add" { "Add to Inventory" } else { "Remove" }}
+                                            {if props.mode == "add" { i18n.t("barcode.add_to_inventory") } else { i18n.t("barcode.remove_from_inventory") }}
                                         </button>
                                     </div>
                                 </div>

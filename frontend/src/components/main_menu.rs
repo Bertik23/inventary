@@ -1,5 +1,6 @@
 use crate::router::Route;
 use crate::app::{UserContext, InventoryContext};
+use crate::i18n::{use_i18n, Language};
 use yew::prelude::*;
 use yew_router::prelude::*;
 
@@ -11,6 +12,14 @@ pub fn main_menu(_props: &Props) -> Html {
     let navigator = use_navigator().unwrap();
     let user_context = use_context::<UserContext>().expect("UserContext not found");
     let inventory_context = use_context::<InventoryContext>().expect("InventoryContext not found");
+    let i18n = use_i18n();
+
+    let set_lang = {
+        let language = i18n.language.clone();
+        Callback::from(move |lang: Language| {
+            language.set(lang);
+        })
+    };
 
     let on_add_click = {
         let navigator = navigator.clone();
@@ -75,6 +84,20 @@ pub fn main_menu(_props: &Props) -> Html {
 
     html! {
         <div class="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+            <div class="w-full flex justify-end gap-2 mb-4 max-w-md">
+                <button 
+                    onclick={let set_lang = set_lang.clone(); move |_| set_lang.emit(Language::En)}
+                    class={classes!("px-2", "py-1", "text-xs", "rounded", "border", "transition", if *i18n.language == Language::En { "bg-blue-600 text-white border-blue-600" } else { "bg-white text-gray-600 border-gray-200" })}
+                >
+                    {"EN"}
+                </button>
+                <button 
+                    onclick={let set_lang = set_lang.clone(); move |_| set_lang.emit(Language::Cs)}
+                    class={classes!("px-2", "py-1", "text-xs", "rounded", "border", "transition", if *i18n.language == Language::Cs { "bg-blue-600 text-white border-blue-600" } else { "bg-white text-gray-600 border-gray-200" })}
+                >
+                    {"CS"}
+                </button>
+            </div>
             <div class="w-full max-w-md space-y-8">
                 <div class="text-center">
                     <div class="mx-auto h-20 w-20 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg mb-6 transform -rotate-3">
@@ -82,8 +105,8 @@ pub fn main_menu(_props: &Props) -> Html {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                         </svg>
                     </div>
-                    <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">{"Inventary!"}</h1>
-                    <p class="mt-2 text-gray-500">{"Manage your stock with ease"}</p>
+                    <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">{i18n.t("main_menu.title")}</h1>
+                    <p class="mt-2 text-gray-500">{if let Some(user) = &*user_context.user { &user.username } else { &i18n.t("common.guest") }}</p>
                 </div>
 
                 <div class="space-y-4">
@@ -97,8 +120,8 @@ pub fn main_menu(_props: &Props) -> Html {
                             </svg>
                         </div>
                         <div class="ml-4 flex-1">
-                            <h3 class="text-lg font-medium text-gray-900">{"Add Item"}</h3>
-                            <p class="text-sm text-gray-500">{"Scan barcode or search manually"}</p>
+                            <h3 class="text-lg font-medium text-gray-900">{i18n.t("main_menu.add_item")}</h3>
+                            <p class="text-sm text-gray-500">{i18n.t("main_menu.add_desc")}</p>
                         </div>
                     </button>
 
@@ -112,8 +135,8 @@ pub fn main_menu(_props: &Props) -> Html {
                             </svg>
                         </div>
                         <div class="ml-4 flex-1">
-                            <h3 class="text-lg font-medium text-gray-900">{"Remove Item"}</h3>
-                            <p class="text-sm text-gray-500">{"Decrease quantity or delete"}</p>
+                            <h3 class="text-lg font-medium text-gray-900">{i18n.t("main_menu.remove_item")}</h3>
+                            <p class="text-sm text-gray-500">{i18n.t("main_menu.remove_desc")}</p>
                         </div>
                     </button>
 
@@ -127,8 +150,8 @@ pub fn main_menu(_props: &Props) -> Html {
                             </svg>
                         </div>
                         <div class="ml-4 flex-1">
-                            <h3 class="text-lg font-medium text-gray-900">{"Show Inventory"}</h3>
-                            <p class="text-sm text-gray-500">{"View full list of items"}</p>
+                            <h3 class="text-lg font-medium text-gray-900">{i18n.t("main_menu.view_inventory")}</h3>
+                            <p class="text-sm text-gray-500">{i18n.t("main_menu.view_desc")}</p>
                         </div>
                     </button>
 
@@ -142,8 +165,8 @@ pub fn main_menu(_props: &Props) -> Html {
                             </svg>
                         </div>
                         <div class="ml-4 flex-1">
-                            <h3 class="text-lg font-medium text-gray-900">{"Share Inventory"}</h3>
-                            <p class="text-sm text-gray-500">{"Give others access to this list"}</p>
+                            <h3 class="text-lg font-medium text-gray-900">{i18n.t("main_menu.share_inventory")}</h3>
+                            <p class="text-sm text-gray-500">{i18n.t("main_menu.share_desc")}</p>
                         </div>
                     </button>
 
@@ -157,8 +180,8 @@ pub fn main_menu(_props: &Props) -> Html {
                             </svg>
                         </div>
                         <div class="ml-4 flex-1">
-                            <h3 class="text-lg font-medium text-gray-900">{"Manage Quick Items"}</h3>
-                            <p class="text-sm text-gray-500">{"Configure common items without barcodes"}</p>
+                            <h3 class="text-lg font-medium text-gray-900">{i18n.t("main_menu.manage_quick_items")}</h3>
+                            <p class="text-sm text-gray-500">{i18n.t("main_menu.manage_quick_desc")}</p>
                         </div>
                     </button>
 
@@ -172,8 +195,8 @@ pub fn main_menu(_props: &Props) -> Html {
                             </svg>
                         </div>
                         <div class="ml-4 flex-1">
-                            <h3 class="text-lg font-medium text-gray-900">{"Manage Inventories"}</h3>
-                            <p class="text-sm text-gray-500">{"Switch or create new inventories"}</p>
+                            <h3 class="text-lg font-medium text-gray-900">{i18n.t("main_menu.manage_inventories")}</h3>
+                            <p class="text-sm text-gray-500">{i18n.t("main_menu.manage_inventories_desc")}</p>
                         </div>
                     </button>
 
@@ -187,14 +210,14 @@ pub fn main_menu(_props: &Props) -> Html {
                             </svg>
                         </div>
                         <div class="ml-4 flex-1">
-                            <h3 class="text-lg font-medium text-gray-900">{"Logout"}</h3>
-                            <p class="text-sm text-gray-500">{"Sign out of your account"}</p>
+                            <h3 class="text-lg font-medium text-gray-900">{i18n.t("main_menu.logout")}</h3>
+                            <p class="text-sm text-gray-500">{i18n.t("login.sign_out_desc")}</p>
                         </div>
                     </button>
                 </div>
 
                 <div class="text-center pt-8">
-                    <p class="text-xs text-gray-400">{"© 2024 Inventary App"}</p>
+                    <p class="text-xs text-gray-400">{i18n.t_with("common.copyright", vec![("year", "2026")])}</p>
                 </div>
             </div>
         </div>

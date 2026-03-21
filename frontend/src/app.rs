@@ -2,6 +2,7 @@ use yew::prelude::*;
 use yew_router::prelude::*;
 use crate::router::{switch, Route};
 use crate::api::User;
+use crate::i18n::I18nProvider;
 use web_sys::window;
 
 #[derive(Clone, PartialEq)]
@@ -58,13 +59,15 @@ pub fn app() -> Html {
     let inventory_context = InventoryContext { inventory_id };
 
     html! {
-        <ContextProvider<UserContext> context={user_context}>
-            <ContextProvider<InventoryContext> context={inventory_context}>
-                <BrowserRouter>
-                    <Switch<Route> render={switch} />
-                </BrowserRouter>
-            </ContextProvider<InventoryContext>>
-        </ContextProvider<UserContext>>
+        <I18nProvider>
+            <ContextProvider<UserContext> context={user_context}>
+                <ContextProvider<InventoryContext> context={inventory_context}>
+                    <BrowserRouter>
+                        <Switch<Route> render={switch} />
+                    </BrowserRouter>
+                </ContextProvider<InventoryContext>>
+            </ContextProvider<UserContext>>
+        </I18nProvider>
     }
 }
 

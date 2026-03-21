@@ -3,6 +3,7 @@ use yew_router::prelude::*;
 use crate::router::Route;
 use crate::api::{fetch_inventory, InventoryItem};
 use crate::app::InventoryContext;
+use crate::i18n::use_i18n;
 
 fn format_quantity(q: f64) -> String {
     let s = format!("{:.2}", q);
@@ -19,12 +20,13 @@ pub fn inventory_list(_props: &Props) -> Html {
     let items = use_state(|| Vec::<InventoryItem>::new());
     let loading = use_state(|| true);
     let error = use_state(|| Option::<String>::None);
+    let i18n = use_i18n();
     
     let inventory_context = use_context::<InventoryContext>().expect("InventoryContext not found");
     let inventory_id = match &*inventory_context.inventory_id {
         Some(id) => id.clone(),
         None => {
-            return html! { <div>{"No inventory selected"}</div> };
+            return html! { <div>{i18n.t("inventory.no_inventory_selected")}</div> };
         }
     };
     
@@ -64,8 +66,8 @@ pub fn inventory_list(_props: &Props) -> Html {
     html! {
         <div class="max-w-lg mx-auto p-4 min-h-screen bg-gray-50">
             <div class="flex justify-between items-center mb-6">
-                <h1 class="text-2xl font-bold text-gray-800">{"Inventory"}</h1>
-                <button class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium" onclick={on_back}>{"Back"}</button>
+                <h1 class="text-2xl font-bold text-gray-800">{i18n.t("inventory.title")}</h1>
+                <button class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium" onclick={on_back}>{i18n.t("common.back")}</button>
             </div>
             
             if *loading {
@@ -73,7 +75,7 @@ pub fn inventory_list(_props: &Props) -> Html {
                     <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 </div>
             } else if let Some(ref err) = *error {
-                <div class="p-4 bg-red-100 text-red-800 rounded-xl border border-red-200">{err}</div>
+                <div class="p-4 bg-red-100 text-red-800 rounded-xl border border-red-200">{i18n.t_with("common.error", vec![("e", err)])}</div>
             } else {
                 <div class="space-y-3">
                     {for items.iter().map(|item| {
@@ -82,7 +84,7 @@ pub fn inventory_list(_props: &Props) -> Html {
                                 <div class="flex justify-between items-start">
                                     <h3 class="font-semibold text-gray-900">{&item.name}</h3>
                                     <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded-full">
-                                        {"Qty: "}{format_quantity(item.quantity)}{" "}{&item.unit}
+                                        {i18n.t_with("inventory.qty", vec![("qty", &format_quantity(item.quantity)), ("unit", &item.unit)])}
                                     </span>
                                 </div>
                                 <div class="text-sm text-gray-500">
