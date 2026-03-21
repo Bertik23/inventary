@@ -699,6 +699,97 @@ pub async fn reset_password(
     Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Password updated successfully"})))
 }
 
+#[actix_web::put("/api/users/{user_id}")]
+pub async fn update_user(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+    req: web::Json<UpdateUserRequest>,
+) -> Result<HttpResponse> {
+    let user_id_param = path.into_inner();
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    use crate::schema::users::dsl::*;
+    
+    let mut update_count = 0;
+    if let Some(ref new_username) = req.username {
+        diesel::update(users.find(&user_id_param))
+            .set(username.eq(new_username))
+            .execute(&mut conn)
+            .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        update_count += 1;
+    }
+    
+    if let Some(ref new_email) = req.email {
+        diesel::update(users.find(&user_id_param))
+            .set(email.eq(new_email))
+            .execute(&mut conn)
+            .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        update_count += 1;
+    }
+    
+    if update_count == 0 {
+        return Ok(HttpResponse::BadRequest().json(serde_json::json!({"error": "Nothing to update"})));
+    }
+    
+    let user = users.find(&user_id_param)
+        .first::<User>(&mut conn)
+        .map_err(|_| actix_web::error::ErrorNotFound("User not found"))?;
+        
+    Ok(HttpResponse::Ok().json(serde_json::json!({"id": user.id, "username": user.username, "email": user.email})))
+}
+
+#[actix_web::post("/api/users/{user_id}/change-password")]
+pub async fn change_password(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+    req: web::Json<ChangePasswordRequest>,
+) -> Result<HttpResponse> {
+    let user_id_param = path.into_inner();
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    use crate::schema::users::dsl::*;
+    
+    let user = users.find(&user_id_param)
+        .first::<User>(&mut conn)
+        .map_err(|_| actix_web::error::ErrorNotFound("User not found"))?;
+        
+    if !verify(&req.current_password, &user.password_hash).unwrap_or(false) {
+        return Err(actix_web::error::ErrorUnauthorized("Invalid current password"));
+    }
+    
+    let new_password_hash = hash(&req.new_password, DEFAULT_COST).map_err(|e| {
+        eprintln!("Hashing error: {:?}", e);
+        actix_web::error::ErrorInternalServerError("Internal server error")
+    })?;
+    
+    diesel::update(users.find(&user_id_param))
+        .set(password_hash.eq(new_password_hash))
+        .execute(&mut conn)
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        
+    Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Password changed successfully"})))
+}
+
+#[actix_web::delete("/api/users/{user_id}")]
+pub async fn delete_user(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+) -> Result<HttpResponse> {
+    let user_id_param = path.into_inner();
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    // In a real app, you'd want to handle dependent data (inventories, etc.)
+    // For now, let's just delete the user. Diesel will fail if there are FK constraints not set to CASCADE.
+    
+    use crate::schema::users::dsl::*;
+    
+    diesel::delete(users.find(&user_id_param))
+        .execute(&mut conn)
+        .map_err(|e| actix_web::error::ErrorInternalServerError(format!("Failed to delete user: {}. You might need to delete their inventories first.", e)))?;
+        
+    Ok(HttpResponse::Ok().json(serde_json::json!({"message": "User deleted successfully"})))
+}
+
 #[actix_web::get("/api/users/{user_id}/inventories")]
 pub async fn get_user_inventories(
     pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,

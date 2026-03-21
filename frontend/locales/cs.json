@@ -60,7 +60,9 @@
         "manage_quick_desc": "Konfigurace běžných položek bez čárových kódů",
         "manage_inventories": "Spravovat inventáře",
         "manage_inventories_desc": "Přepněte nebo vytvořte nové inventáře",
-        "logout": "Odhlásit se"
+        "logout": "Odhlásit se",
+        "account_settings": "Nastavení účtu",
+        "account_desc": "Spravujte svůj profil a zabezpečení"
     },
     "inventory": {
         "title": "Inventář",
@@ -126,5 +128,23 @@
         "unit_g": "g (Váha)",
         "unit_l": "l (Objem)",
         "unit_ml": "ml (Objem)"
+    },
+    "account": {
+        "title": "Nastavení účtu",
+        "profile_section": "Informace o profilu",
+        "security_section": "Zabezpečení",
+        "danger_section": "Nebezpečná zóna",
+        "update_profile": "Aktualizovat profil",
+        "change_password": "Změnit heslo",
+        "delete_account": "Smazat účet",
+        "current_password": "Současné heslo",
+        "new_password": "Nové heslo",
+        "confirm_new_password": "Potvrdit nové heslo",
+        "delete_confirm_title": "Jste si naprosto jisti?",
+        "delete_confirm_desc": "Tuto akci nelze vrátit zpět. Tímto trvale smažete svůj účet a všechna přidružená data.",
+        "delete_button": "Ano, smazat můj účet",
+        "profile_updated": "Profil byl úspěšně aktualizován",
+        "password_changed": "Heslo bylo úspěšně změněno",
+        "account_deleted": "Účet byl úspěšně smazán"
     }
 }

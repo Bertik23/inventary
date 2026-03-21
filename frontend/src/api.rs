@@ -112,6 +112,18 @@ pub struct ResetPasswordRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct UpdateUserRequest {
+    pub username: Option<String>,
+    pub email: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct CreateInventoryRequest {
     pub name: String,
     pub owner_id: String,
@@ -199,6 +211,21 @@ pub async fn reset_password(req: ResetPasswordRequest) -> Result<(), String> {
     let url = format!("{}/users/reset-password", get_api_base());
     let _: serde_json::Value = fetch_json(&url, Some(&req)).await?;
     Ok(())
+}
+
+pub async fn update_user(user_id: &str, req: UpdateUserRequest) -> Result<User, String> {
+    let url = format!("{}/users/{}", get_api_base(), user_id);
+    fetch_put_json(&url, Some(&req)).await
+}
+
+pub async fn change_password(user_id: &str, req: ChangePasswordRequest) -> Result<(), String> {
+    let url = format!("{}/users/{}/change-password", get_api_base(), user_id);
+    fetch_json(&url, Some(&req)).await
+}
+
+pub async fn delete_user(user_id: &str) -> Result<(), String> {
+    let url = format!("{}/users/{}", get_api_base(), user_id);
+    fetch_delete(&url, None::<&()>).await
 }
 
 pub async fn get_user_inventories(user_id: &str) -> Result<Vec<Inventory>, String> {
@@ -306,16 +333,31 @@ async fn fetch_put<T: Serialize>(
     fetch_method(url, "PUT", body).await
 }
 
+async fn fetch_put_json<T: Serialize, R: for<'de> Deserialize<'de>>(
+    url: &str,
+    body: Option<&T>,
+) -> Result<R, String> {
+    fetch_json_with_method(url, "PUT", body).await
+}
+
 async fn fetch_json<T: Serialize, R: for<'de> Deserialize<'de>>(
     url: &str,
     body: Option<&T>,
 ) -> Result<R, String> {
+    let method = if body.is_some() { "POST" } else { "GET" };
+    fetch_json_with_method(url, method, body).await
+}
+
+async fn fetch_json_with_method<T: Serialize, R: for<'de> Deserialize<'de>>(
+    url: &str,
+    method: &str,
+    body: Option<&T>,
+) -> Result<R, String> {
     let mut opts = RequestInit::new();
-    opts.set_method("GET");
+    opts.set_method(method);
     opts.set_mode(RequestMode::Cors);
     
     if let Some(body_data) = body {
-        opts.set_method("POST");
         let body_str = serde_json::to_string(body_data).map_err(|e| e.to_string())?;
         let body_js = JsValue::from_str(&body_str);
         opts.set_body(&body_js);

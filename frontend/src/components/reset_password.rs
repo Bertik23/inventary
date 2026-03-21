@@ -33,6 +33,7 @@ pub fn reset_password_comp(_props: &Props) -> Html {
         let loading = loading.clone();
         let token = token.clone();
         let navigator = navigator.clone();
+        let i18n = i18n.clone();
 
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
@@ -66,6 +67,7 @@ pub fn reset_password_comp(_props: &Props) -> Html {
             let message = message.clone();
             let loading = loading.clone();
             let navigator = navigator.clone();
+            let i18n = i18n.clone();
 
             wasm_bindgen_futures::spawn_local(async move {
                 match reset_password(req).await {

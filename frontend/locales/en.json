@@ -60,7 +60,9 @@
         "manage_quick_desc": "Configure common items without barcodes",
         "manage_inventories": "Manage Inventories",
         "manage_inventories_desc": "Switch or create new inventories",
-        "logout": "Log Out"
+        "logout": "Log Out",
+        "account_settings": "Account Settings",
+        "account_desc": "Manage your profile and security"
     },
     "inventory": {
         "title": "Inventory",
@@ -126,5 +128,23 @@
         "unit_g": "g (Weight)",
         "unit_l": "l (Volume)",
         "unit_ml": "ml (Volume)"
+    },
+    "account": {
+        "title": "Account Settings",
+        "profile_section": "Profile Information",
+        "security_section": "Security",
+        "danger_section": "Danger Zone",
+        "update_profile": "Update Profile",
+        "change_password": "Change Password",
+        "delete_account": "Delete Account",
+        "current_password": "Current Password",
+        "new_password": "New Password",
+        "confirm_new_password": "Confirm New Password",
+        "delete_confirm_title": "Are you absolutely sure?",
+        "delete_confirm_desc": "This action cannot be undone. This will permanently delete your account and all associated data.",
+        "delete_button": "Yes, delete my account",
+        "profile_updated": "Profile updated successfully",
+        "password_changed": "Password changed successfully",
+        "account_deleted": "Account deleted successfully"
     }
 }

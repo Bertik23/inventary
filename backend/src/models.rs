@@ -92,6 +92,18 @@ pub struct ResetPasswordRequest {
     pub new_password: String,
 }
 
+#[derive(Deserialize)]
+pub struct UpdateUserRequest {
+    pub username: Option<String>,
+    pub email: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
+}
+
 // Inventory Models
 #[derive(Queryable, Serialize, Deserialize, Clone)]
 pub struct Inventory {

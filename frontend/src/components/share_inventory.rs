@@ -72,6 +72,7 @@ pub fn share_inventory(props: &Props) -> Html {
         let inventory_id = inventory_id.clone();
         let error = error.clone();
         let fetch_users = fetch_users.clone();
+        let i18n = i18n.clone();
 
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();

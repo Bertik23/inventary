@@ -61,6 +61,13 @@ pub fn main_menu(_props: &Props) -> Html {
         })
     };
 
+    let on_account_settings_click = {
+        let navigator = navigator.clone();
+        Callback::from(move |_| {
+            navigator.push(&Route::Profile);
+        })
+    };
+
     let on_manage_custom_items_click = {
         let navigator = navigator.clone();
         let inventory_id = (*inventory_context.inventory_id).clone();
@@ -106,7 +113,7 @@ pub fn main_menu(_props: &Props) -> Html {
                         </svg>
                     </div>
                     <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">{i18n.t("main_menu.title")}</h1>
-                    <p class="mt-2 text-gray-500">{if let Some(user) = &*user_context.user { &user.username } else { &i18n.t("common.guest") }}</p>
+                    <p class="mt-2 text-gray-500">{if let Some(user) = &*user_context.user { user.username.clone() } else { i18n.t("common.guest") }}</p>
                 </div>
 
                 <div class="space-y-4">
@@ -197,6 +204,21 @@ pub fn main_menu(_props: &Props) -> Html {
                         <div class="ml-4 flex-1">
                             <h3 class="text-lg font-medium text-gray-900">{i18n.t("main_menu.manage_inventories")}</h3>
                             <p class="text-sm text-gray-500">{i18n.t("main_menu.manage_inventories_desc")}</p>
+                        </div>
+                    </button>
+
+                    <button
+                        onclick={on_account_settings_click}
+                        class="w-full group relative flex items-center p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-purple-300 transition-all duration-200 text-left"
+                    >
+                        <div class="flex-shrink-0 h-12 w-12 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white transition-colors duration-200">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                        </div>
+                        <div class="ml-4 flex-1">
+                            <h3 class="text-lg font-medium text-gray-900">{i18n.t("main_menu.account_settings")}</h3>
+                            <p class="text-sm text-gray-500">{i18n.t("main_menu.account_desc")}</p>
                         </div>
                     </button>
 

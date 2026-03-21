@@ -51,6 +51,7 @@ pub fn login(_props: &Props) -> Html {
 
         let user_context = user_context.clone();
         let navigator = navigator.clone();
+        let i18n = i18n.clone();
 
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
@@ -90,6 +91,7 @@ pub fn login(_props: &Props) -> Html {
             let loading = loading.clone();
             let user_context = user_context.clone();
             let navigator = navigator.clone();
+            let i18n = i18n.clone();
 
             wasm_bindgen_futures::spawn_local(async move {
                 if is_forgot {
