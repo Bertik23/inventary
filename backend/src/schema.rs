@@ -1,6 +1,15 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    custom_item_templates (id) {
+        id -> Text,
+        inventory_id -> Nullable<Text>,
+        name -> Text,
+        default_unit -> Text,
+    }
+}
+
+diesel::table! {
     inventories (id) {
         id -> Text,
         name -> Text,
@@ -15,7 +24,8 @@ diesel::table! {
         inventory_id -> Text,
         barcode -> Nullable<Text>,
         name -> Text,
-        quantity -> Integer,
+        quantity -> Double,
+        unit -> Text,
         product_data -> Nullable<Text>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
@@ -48,6 +58,7 @@ diesel::joinable!(inventory_users -> inventories (inventory_id));
 diesel::joinable!(inventory_users -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    custom_item_templates,
     inventories,
     inventory_items,
     inventory_users,

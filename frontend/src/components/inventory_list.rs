@@ -4,6 +4,13 @@ use crate::router::Route;
 use crate::api::{fetch_inventory, InventoryItem};
 use crate::app::InventoryContext;
 
+fn format_quantity(q: f64) -> String {
+    let s = format!("{:.2}", q);
+    let s = s.strip_suffix(".00").unwrap_or(&s);
+    let s = s.strip_suffix("0").filter(|v| v.contains('.')).unwrap_or(s);
+    s.to_string()
+}
+
 #[derive(Properties, PartialEq)]
 pub struct Props {}
 
@@ -74,7 +81,9 @@ pub fn inventory_list(_props: &Props) -> Html {
                             <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-1 hover:shadow-md transition">
                                 <div class="flex justify-between items-start">
                                     <h3 class="font-semibold text-gray-900">{&item.name}</h3>
-                                    <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded-full">{"Qty: "}{item.quantity}</span>
+                                    <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded-full">
+                                        {"Qty: "}{format_quantity(item.quantity)}{" "}{&item.unit}
+                                    </span>
                                 </div>
                                 <div class="text-sm text-gray-500">
                                     {if let Some(ref barcode) = item.barcode {

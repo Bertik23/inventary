@@ -86,11 +86,13 @@ pub async fn get_product_by_barcode(barcode: &str) -> Result<ProductInfo, Box<dy
     };
     
     Ok(ProductInfo {
+        id: None,
         barcode: Some(barcode.to_string()),
         name,
         image_url,
         brand,
         categories,
+        unit: None,
     })
 }
 
@@ -172,11 +174,13 @@ pub async fn search_products(query: &str) -> Result<Vec<ProductInfo>, Box<dyn st
         };
         
         results.push(ProductInfo {
+            id: None,
             barcode,
             name,
             image_url,
             brand,
             categories,
+            unit: None,
         });
     }
     

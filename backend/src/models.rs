@@ -1,7 +1,7 @@
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use chrono::NaiveDateTime;
-use crate::schema::{inventory_items, users, inventories, inventory_users};
+use crate::schema::{inventory_items, users, inventories, inventory_users, custom_item_templates};
 
 #[derive(Queryable, Serialize, Deserialize, Clone)]
 pub struct InventoryItem {
@@ -9,7 +9,8 @@ pub struct InventoryItem {
     pub inventory_id: String,
     pub barcode: Option<String>,
     pub name: String,
-    pub quantity: i32,
+    pub quantity: f64,
+    pub unit: String,
     pub product_data: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
@@ -22,7 +23,8 @@ pub struct NewInventoryItem {
     pub inventory_id: String,
     pub barcode: Option<String>,
     pub name: String,
-    pub quantity: i32,
+    pub quantity: f64,
+    pub unit: String,
     pub product_data: Option<String>,
 }
 
@@ -31,7 +33,8 @@ pub struct AddItemRequest {
     pub inventory_id: String,
     pub barcode: Option<String>,
     pub name: Option<String>,
-    pub quantity: Option<i32>,
+    pub quantity: Option<f64>,
+    pub unit: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -39,16 +42,19 @@ pub struct RemoveItemRequest {
     pub inventory_id: String,
     pub barcode: Option<String>,
     pub id: Option<String>,
-    pub quantity: Option<i32>,
+    pub name: Option<String>,
+    pub quantity: Option<f64>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ProductInfo {
+    pub id: Option<String>,
     pub barcode: Option<String>,
     pub name: String,
     pub image_url: Option<String>,
     pub brand: Option<String>,
     pub categories: Vec<String>,
+    pub unit: Option<String>,
 }
 
 // User Models
@@ -124,4 +130,22 @@ pub struct SharedUser {
     pub username: String,
     pub email: String,
     pub role: String,
+}
+
+// Custom Item Template Models
+#[derive(Queryable, Serialize, Deserialize, Clone)]
+pub struct CustomItemTemplate {
+    pub id: String,
+    pub inventory_id: Option<String>,
+    pub name: String,
+    pub default_unit: String,
+}
+
+#[derive(Insertable, Deserialize, Serialize)]
+#[diesel(table_name = custom_item_templates)]
+pub struct NewCustomItemTemplate {
+    pub id: String,
+    pub inventory_id: Option<String>,
+    pub name: String,
+    pub default_unit: String,
 }

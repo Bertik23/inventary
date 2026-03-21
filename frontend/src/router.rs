@@ -19,6 +19,8 @@ pub enum Route {
     ResetPassword,
     #[at("/inventories/:id/share")]
     Share { id: String },
+    #[at("/inventories/:id/custom-items")]
+    CustomItems { id: String },
 }
 
 pub fn switch(routes: Route) -> Html {
@@ -42,6 +44,9 @@ pub fn switch(routes: Route) -> Html {
         }
         Route::Share { id } => {
             html! { <crate::components::share_inventory::ShareInventory inventory_id={id} /> }
+        }
+        Route::CustomItems { id } => {
+            html! { <crate::components::custom_item_manager::CustomItemManager inventory_id={id} /> }
         }
     }
 }

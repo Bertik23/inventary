@@ -5,6 +5,13 @@ use crate::api::{add_item, remove_item, search_products, search_inventory_items,
 use crate::barcode::BarcodeScanner as BarcodeScannerImpl;
 use crate::app::InventoryContext;
 
+fn format_quantity(q: f64) -> String {
+    let s = format!("{:.2}", q);
+    let s = s.strip_suffix(".00").unwrap_or(&s);
+    let s = s.strip_suffix("0").filter(|v| v.contains('.')).unwrap_or(s);
+    s.to_string()
+}
+
 #[derive(Properties, PartialEq)]
 pub struct Props {
     pub mode: String,
@@ -17,7 +24,9 @@ pub fn barcode_scanner(props: &Props) -> Html {
     let search_results = use_state(|| Vec::<ProductInfo>::new());
     let scanning = use_state(|| false);
     let selected_product = use_state(|| Option::<ProductInfo>::None);
-    let quantity = use_state(|| 1);
+    let quantity = use_state(|| 1.0);
+    let selected_unit = use_state(|| "pcs".to_string());
+    let templates = use_state(|| Vec::<crate::api::CustomItemTemplate>::new());
     let loading = use_state(|| false);
     let message = use_state(|| Option::<String>::None);
     
@@ -30,6 +39,21 @@ pub fn barcode_scanner(props: &Props) -> Html {
             return html! { <div>{"No inventory selected"}</div> };
         }
     };
+
+    {
+        let templates = templates.clone();
+        let inventory_id = inventory_id.clone();
+        use_effect_with((), move |_| {
+            let templates = templates.clone();
+            let inventory_id = inventory_id.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                match crate::api::get_custom_item_templates(Some(&inventory_id)).await {
+                    Ok(t) => templates.set(t),
+                    Err(e) => log::error!("Failed to fetch templates: {}", e),
+                }
+            });
+        });
+    }
     
     let on_back = {
         let navigator = navigator.clone();
@@ -63,7 +87,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
                 let result = if mode == "remove" {
                     search_inventory_items(&query_str, &inventory_id).await
                 } else {
-                    search_products(&query_str).await
+                    search_products(&query_str, Some(&inventory_id)).await
                 };
                 
                 match result {
@@ -91,7 +115,13 @@ pub fn barcode_scanner(props: &Props) -> Html {
     
     let on_product_select = {
         let selected = selected_product.clone();
+        let selected_unit = selected_unit.clone();
         Callback::from(move |product: ProductInfo| {
+            if let Some(ref u) = product.unit {
+                selected_unit.set(u.clone());
+            } else {
+                selected_unit.set("pcs".to_string());
+            }
             selected.set(Some(product));
         })
     };
@@ -99,6 +129,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
     let on_submit = {
         let selected = selected_product.clone();
         let quantity = quantity.clone();
+        let selected_unit = selected_unit.clone();
         let loading = loading.clone();
         let message = message.clone();
         let navigator = navigator.clone();
@@ -108,6 +139,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
         Callback::from({
             let selected = selected.clone();
             let quantity = quantity.clone();
+            let selected_unit = selected_unit.clone();
             let loading = loading.clone();
             let message = message.clone();
             let navigator = navigator.clone();
@@ -128,6 +160,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
                 let message = message.clone();
                 let loading = loading.clone();
                 let qty = *quantity;
+                let unit = (*selected_unit).clone();
                 let inventory_id = inventory_id.clone();
                 
                 wasm_bindgen_futures::spawn_local(async move {
@@ -137,12 +170,14 @@ pub fn barcode_scanner(props: &Props) -> Html {
                             barcode: product.barcode.clone(),
                             name: Some(product.name.clone()),
                             quantity: Some(qty),
+                            unit: Some(unit),
                         }).await
                     } else {
                         remove_item(RemoveItemRequest {
                             inventory_id: inventory_id,
                             barcode: product.barcode.clone(),
-                            id: None,
+                            id: product.id.clone(),
+                            name: Some(product.name.clone()),
                             quantity: Some(qty),
                         }).await
                     };
@@ -177,34 +212,50 @@ pub fn barcode_scanner(props: &Props) -> Html {
         let loading = loading.clone();
         let message = message.clone();
         let barcode_input = barcode_input.clone();
+        let selected_unit = selected_unit.clone();
         
-        Callback::from(move |barcode: String| {
-            if barcode.trim().is_empty() {
-                message.set(Some("Please enter a barcode".to_string()));
-                return;
-            }
-            
-            loading.set(true);
-            message.set(None);
+        Callback::from({
             let selected = selected.clone();
             let loading = loading.clone();
             let message = message.clone();
             let barcode_input = barcode_input.clone();
-            let barcode_trimmed = barcode.trim().to_string();
-            
-            wasm_bindgen_futures::spawn_local(async move {
-                match get_product_by_barcode(&barcode_trimmed).await {
-                    Ok(product) => {
-                        selected.set(Some(product));
-                        loading.set(false);
-                        barcode_input.set(String::new()); // Clear input on success
-                    }
-                    Err(e) => {
-                        message.set(Some(format!("Product not found: {}", e)));
-                        loading.set(false);
-                    }
+            let selected_unit = selected_unit.clone();
+            let inventory_id = inventory_id.clone();
+            move |barcode: String| {
+                if barcode.trim().is_empty() {
+                    message.set(Some("Please enter a barcode".to_string()));
+                    return;
                 }
-            });
+                
+                loading.set(true);
+                message.set(None);
+                let selected = selected.clone();
+                let loading = loading.clone();
+                let message = message.clone();
+                let barcode_input = barcode_input.clone();
+                let barcode_trimmed = barcode.trim().to_string();
+                let inventory_id = inventory_id.clone();
+                let selected_unit = selected_unit.clone();
+                
+                wasm_bindgen_futures::spawn_local(async move {
+                    match get_product_by_barcode(&barcode_trimmed, Some(&inventory_id)).await {
+                        Ok(product) => {
+                            if let Some(ref u) = product.unit {
+                                selected_unit.set(u.clone());
+                            } else {
+                                selected_unit.set("pcs".to_string());
+                            }
+                            selected.set(Some(product));
+                            loading.set(false);
+                            barcode_input.set(String::new()); // Clear input on success
+                        }
+                        Err(e) => {
+                            message.set(Some(format!("Product not found: {}", e)));
+                            loading.set(false);
+                        }
+                    }
+                });
+            }
         })
     };
     
@@ -308,6 +359,38 @@ pub fn barcode_scanner(props: &Props) -> Html {
             </div>
             
             <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-3 text-gray-700">{"Quick Add (No Barcode)"}</h2>
+                <div class="flex flex-wrap gap-2">
+                    {for templates.iter().map(|template| {
+                        let template = template.clone();
+                        let on_product_select = on_product_select.clone();
+                        let selected_unit = selected_unit.clone();
+                        let quantity = quantity.clone();
+                        let template_name = template.name.clone();
+                        html! {
+                            <button 
+                                class="px-4 py-2 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:text-blue-600 transition shadow-sm text-sm font-medium"
+                                onclick={Callback::from(move |_| {
+                                    on_product_select.emit(ProductInfo {
+                                        id: None,
+                                        barcode: None,
+                                        name: template.name.clone(),
+                                        image_url: None,
+                                        brand: None,
+                                        categories: vec![],
+                                        unit: Some(template.default_unit.clone()),
+                                    });
+                                    quantity.set(1.0);
+                                })}
+                            >
+                                {template_name}
+                            </button>
+                        }
+                    })}
+                </div>
+            </div>
+
+            <div class="mb-6">
                 <h2 class="text-lg font-semibold mb-3 text-gray-700">{"Or Search by Name"}</h2>
                 <div class="flex gap-2 mb-4">
                     <input
@@ -402,25 +485,57 @@ pub fn barcode_scanner(props: &Props) -> Html {
                         </div>
                         
                         {if let Some(ref product) = *selected_product {
+                            let quantity_val = *quantity;
+                            let unit_val = (*selected_unit).clone();
                             html! {
                                 <div class="space-y-4">
                                     <p class="text-sm text-gray-600 truncate"><strong>{&product.name}</strong></p>
-                                    <div class="flex items-center gap-4">
-                                        <label class="flex items-center gap-2 text-gray-700 font-medium">
-                                            {"Qty:"}
+                                    <div class="flex flex-wrap items-center gap-4">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-gray-700 font-medium">{"Qty:"}</span>
                                             <input
                                                 type="number"
-                                                min="1"
-                                                class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-center"
-                                                value={quantity.to_string()}
-                                                oninput={Callback::from(move |e: InputEvent| {
-                                                    let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-                                                    if let Ok(qty) = input.value().parse::<i32>() {
-                                                        quantity.set(qty.max(1));
+                                                step="0.1"
+                                                min="0.1"
+                                                class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-center"
+                                                value={format_quantity(quantity_val)}
+                                                oninput={Callback::from({
+                                                    let quantity = quantity.clone();
+                                                    move |e: InputEvent| {
+                                                        let input: web_sys::HtmlInputElement = e.target_unchecked_into();
+                                                        if let Ok(qty) = input.value().parse::<f64>() {
+                                                            quantity.set(qty);
+                                                        }
                                                     }
                                                 })}
                                             />
-                                        </label>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-gray-700 font-medium">{"Unit:"}</span>
+                                            {if product.unit.is_some() {
+                                                html! { <span class="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg border border-gray-200 font-medium">{unit_val.clone()}</span> }
+                                            } else {
+                                                html! {
+                                                    <select 
+                                                        class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                        value={unit_val.clone()}
+                                                        onchange={Callback::from({
+                                                            let selected_unit = selected_unit.clone();
+                                                            move |e: Event| {
+                                                                let input: web_sys::HtmlSelectElement = e.target_unchecked_into();
+                                                                selected_unit.set(input.value());
+                                                            }
+                                                        })}
+                                                    >
+                                                        <option value="pcs" selected={unit_val == "pcs"}>{"pcs"}</option>
+                                                        <option value="kg" selected={unit_val == "kg"}>{"kg"}</option>
+                                                        <option value="g" selected={unit_val == "g"}>{"g"}</option>
+                                                        <option value="l" selected={unit_val == "l"}>{"l"}</option>
+                                                        <option value="ml" selected={unit_val == "ml"}>{"ml"}</option>
+                                                    </select>
+                                                }
+                                            }}
+                                        </div>
                                         <button 
                                             class={classes!(
                                                 "flex-1", "py-3", "px-4", "rounded-lg", "text-white", "font-medium", "transition", "shadow-sm",

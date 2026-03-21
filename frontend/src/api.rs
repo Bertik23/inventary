@@ -17,13 +17,14 @@ pub fn set_api_base(url: &str) {
     local_storage.set_item("api_base", url).unwrap();
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct InventoryItem {
     pub id: String,
     pub inventory_id: String,
     pub barcode: Option<String>,
     pub name: String,
-    pub quantity: i32,
+    pub quantity: f64,
+    pub unit: String,
     pub product_data: Option<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -34,7 +35,8 @@ pub struct AddItemRequest {
     pub inventory_id: String,
     pub barcode: Option<String>,
     pub name: Option<String>,
-    pub quantity: Option<i32>,
+    pub quantity: Option<f64>,
+    pub unit: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -42,16 +44,39 @@ pub struct RemoveItemRequest {
     pub inventory_id: String,
     pub barcode: Option<String>,
     pub id: Option<String>,
-    pub quantity: Option<i32>,
+    pub name: Option<String>,
+    pub quantity: Option<f64>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct CustomItemTemplate {
+    pub id: String,
+    pub inventory_id: Option<String>,
+    pub name: String,
+    pub default_unit: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CreateTemplateRequest {
+    pub inventory_id: Option<String>,
+    pub name: String,
+    pub default_unit: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct UpdateTemplateRequest {
+    pub default_unit: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ProductInfo {
+    pub id: Option<String>,
     pub barcode: Option<String>,
     pub name: String,
     pub image_url: Option<String>,
     pub brand: Option<String>,
     pub categories: Vec<String>,
+    pub unit: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -107,8 +132,12 @@ pub async fn remove_item(req: RemoveItemRequest) -> Result<InventoryItem, String
     fetch_json(&url, Some(&req)).await
 }
 
-pub async fn search_products(query: &str) -> Result<Vec<ProductInfo>, String> {
-    let url = format!("{}/search?q={}", get_api_base(), urlencoding::encode(query));
+pub async fn search_products(query: &str, inventory_id: Option<&str>) -> Result<Vec<ProductInfo>, String> {
+    let url = if let Some(id) = inventory_id {
+        format!("{}/search?q={}&inventory_id={}", get_api_base(), urlencoding::encode(query), id)
+    } else {
+        format!("{}/search?q={}", get_api_base(), urlencoding::encode(query))
+    };
     fetch_json(&url, None::<&()>).await
 }
 
@@ -117,9 +146,37 @@ pub async fn search_inventory_items(query: &str, inventory_id: &str) -> Result<V
     fetch_json(&url, None::<&()>).await
 }
 
-pub async fn get_product_by_barcode(barcode: &str) -> Result<ProductInfo, String> {
-    let url = format!("{}/product/{}", get_api_base(), barcode);
+pub async fn get_product_by_barcode(barcode: &str, inventory_id: Option<&str>) -> Result<ProductInfo, String> {
+    let url = if let Some(id) = inventory_id {
+        format!("{}/product/{}?inventory_id={}", get_api_base(), barcode, id)
+    } else {
+        format!("{}/product/{}", get_api_base(), barcode)
+    };
     fetch_json(&url, None::<&()>).await
+}
+
+pub async fn get_custom_item_templates(inventory_id: Option<&str>) -> Result<Vec<CustomItemTemplate>, String> {
+    let url = if let Some(id) = inventory_id {
+        format!("{}/inventory/templates?inventory_id={}", get_api_base(), id)
+    } else {
+        format!("{}/inventory/templates", get_api_base())
+    };
+    fetch_json(&url, None::<&()>).await
+}
+
+pub async fn create_custom_item_template(req: CreateTemplateRequest) -> Result<CustomItemTemplate, String> {
+    let url = format!("{}/inventory/templates", get_api_base());
+    fetch_json(&url, Some(&req)).await
+}
+
+pub async fn update_custom_item_template(template_id: &str, req: UpdateTemplateRequest) -> Result<(), String> {
+    let url = format!("{}/inventory/templates/{}", get_api_base(), template_id);
+    fetch_put(&url, Some(&req)).await
+}
+
+pub async fn delete_custom_item_template(template_id: &str) -> Result<(), String> {
+    let url = format!("{}/inventory/templates/{}", get_api_base(), template_id);
+    fetch_delete(&url, None::<&()>).await
 }
 
 pub async fn login_user(req: AuthRequest) -> Result<User, String> {
@@ -188,12 +245,13 @@ pub async fn unshare_inventory(inventory_id: &str, req: UnshareInventoryRequest)
     fetch_delete(&url, Some(&req)).await
 }
 
-async fn fetch_delete<T: Serialize>(
+async fn fetch_method<T: Serialize>(
     url: &str,
+    method: &str,
     body: Option<&T>,
 ) -> Result<(), String> {
     let mut opts = RequestInit::new();
-    opts.set_method("DELETE");
+    opts.set_method(method);
     opts.set_mode(RequestMode::Cors);
     
     if let Some(body_data) = body {
@@ -219,7 +277,6 @@ async fn fetch_delete<T: Serialize>(
     
     if !resp.ok() {
         let status = resp.status();
-        // Try to parse error message from JSON body
         if let Ok(promise) = resp.json() {
             if let Ok(json) = JsFuture::from(promise).await {
                 if let Ok(error_val) = js_sys::Reflect::get(&json, &JsValue::from_str("error")) {
@@ -235,11 +292,25 @@ async fn fetch_delete<T: Serialize>(
     Ok(())
 }
 
+async fn fetch_delete<T: Serialize>(
+    url: &str,
+    body: Option<&T>,
+) -> Result<(), String> {
+    fetch_method(url, "DELETE", body).await
+}
+
+async fn fetch_put<T: Serialize>(
+    url: &str,
+    body: Option<&T>,
+) -> Result<(), String> {
+    fetch_method(url, "PUT", body).await
+}
+
 async fn fetch_json<T: Serialize, R: for<'de> Deserialize<'de>>(
     url: &str,
     body: Option<&T>,
 ) -> Result<R, String> {
-    let opts = RequestInit::new();
+    let mut opts = RequestInit::new();
     opts.set_method("GET");
     opts.set_mode(RequestMode::Cors);
     
@@ -267,7 +338,6 @@ async fn fetch_json<T: Serialize, R: for<'de> Deserialize<'de>>(
     
     if !resp.ok() {
         let status = resp.status();
-        // Try to parse error message from JSON body
         if let Ok(promise) = resp.json() {
             if let Ok(json) = JsFuture::from(promise).await {
                 if let Ok(error_val) = js_sys::Reflect::get(&json, &JsValue::from_str("error")) {

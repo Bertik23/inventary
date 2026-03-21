@@ -59,6 +59,10 @@ async fn main() -> std::io::Result<()> {
                 .service(handlers::share_inventory)
                 .service(handlers::get_inventory_users)
                 .service(handlers::unshare_inventory)
+                .service(handlers::get_custom_item_templates)
+                .service(handlers::create_custom_item_template)
+                .service(handlers::update_custom_item_template)
+                .service(handlers::delete_custom_item_template)
         })
         .bind("127.0.0.1:8080")?
         .run()

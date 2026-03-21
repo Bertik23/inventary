@@ -100,11 +100,7 @@ pub async fn add_item(
         })));
     };
     
-    let qty = req.quantity.unwrap_or(1);
-    let prod_data = product_info.as_ref()
-        .and_then(|_| serde_json::to_string(product_info.as_ref().unwrap()).ok());
-    
-    // Check if item with same barcode exists
+    // 1. Check if item already exists in this inventory (by barcode or name)
     let existing_item = if let Some(ref barcode_val) = req.barcode {
         use crate::schema::inventory_items::dsl::{barcode, inventory_id};
         inventory_items::table
@@ -113,8 +109,38 @@ pub async fn add_item(
             .first::<InventoryItem>(&mut conn)
             .ok()
     } else {
-        None
+        use crate::schema::inventory_items::dsl::{name, inventory_id};
+        inventory_items::table
+            .filter(name.eq(&item_name))
+            .filter(inventory_id.eq(&req.inventory_id))
+            .first::<InventoryItem>(&mut conn)
+            .ok()
     };
+
+    // 2. Determine the unit to use
+    let unit_val = if let Some(ref item) = existing_item {
+        // Use existing item's unit
+        item.unit.clone()
+    } else {
+        // Check for template/config
+        use crate::schema::custom_item_templates::dsl::*;
+        let template = custom_item_templates
+            .filter(inventory_id.eq(&req.inventory_id).or(inventory_id.is_null()))
+            .filter(name.eq(&item_name))
+            .order(inventory_id.desc()) // Inventory-specific first (non-null > null)
+            .first::<CustomItemTemplate>(&mut conn)
+            .ok();
+            
+        if let Some(t) = template {
+            t.default_unit
+        } else {
+            req.unit.clone().unwrap_or_else(|| "pcs".to_string())
+        }
+    };
+
+    let qty = req.quantity.unwrap_or(1.0);
+    let prod_data = product_info.as_ref()
+        .and_then(|_| serde_json::to_string(product_info.as_ref().unwrap()).ok());
     
     if let Some(mut item) = existing_item {
         // Update existing item
@@ -140,6 +166,7 @@ pub async fn add_item(
             barcode: req.barcode.clone(),
             name: item_name,
             quantity: qty,
+            unit: unit_val,
             product_data: prod_data,
         };
         
@@ -183,9 +210,16 @@ pub async fn remove_item(
             .filter(inventory_id.eq(&req.inventory_id))
             .first::<InventoryItem>(&mut conn)
             .ok()
+    } else if let Some(ref name_val) = req.name {
+        use crate::schema::inventory_items::dsl::{name, inventory_id};
+        inventory_items::table
+            .filter(name.eq(name_val))
+            .filter(inventory_id.eq(&req.inventory_id))
+            .first::<InventoryItem>(&mut conn)
+            .ok()
     } else {
         return Ok(HttpResponse::BadRequest().json(serde_json::json!({
-            "error": "Item ID or barcode required"
+            "error": "Item ID, barcode or name required"
         })));
     };
     
@@ -198,7 +232,7 @@ pub async fn remove_item(
         }
     };
     
-    let remove_quantity = req.quantity.unwrap_or(1);
+    let remove_quantity = req.quantity.unwrap_or(1.0);
     
     if item.quantity <= remove_quantity {
         // Remove item completely
@@ -236,6 +270,112 @@ pub async fn remove_item(
     }
 }
 
+#[actix_web::get("/api/inventory/templates")]
+pub async fn get_custom_item_templates(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> Result<HttpResponse> {
+    let inventory_id_param = query.get("inventory_id");
+        
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    use crate::schema::custom_item_templates::dsl::*;
+    
+    let mut filter = custom_item_templates.into_boxed();
+    
+    if let Some(inv_id) = inventory_id_param {
+        filter = filter.filter(inventory_id.is_null().or(inventory_id.eq(inv_id)));
+    } else {
+        filter = filter.filter(inventory_id.is_null());
+    }
+    
+    let templates = filter
+        .load::<CustomItemTemplate>(&mut conn)
+        .map_err(|e| {
+            eprintln!("Error loading templates: {:?}", e);
+            actix_web::error::ErrorInternalServerError("Database error")
+        })?;
+    
+    Ok(HttpResponse::Ok().json(templates))
+}
+
+#[derive(serde::Deserialize)]
+pub struct CreateTemplateRequest {
+    pub inventory_id: Option<String>,
+    pub name: String,
+    pub default_unit: String,
+}
+
+#[actix_web::post("/api/inventory/templates")]
+pub async fn create_custom_item_template(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    req: web::Json<CreateTemplateRequest>,
+) -> Result<HttpResponse> {
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    let new_template = NewCustomItemTemplate {
+        id: Uuid::new_v4().to_string(),
+        inventory_id: req.inventory_id.clone(),
+        name: req.name.clone(),
+        default_unit: req.default_unit.clone(),
+    };
+    
+    diesel::insert_into(crate::schema::custom_item_templates::table)
+        .values(&new_template)
+        .execute(&mut conn)
+        .map_err(|e| {
+            eprintln!("Error creating template: {:?}", e);
+            actix_web::error::ErrorInternalServerError("Database error (likely duplicate name)")
+        })?;
+        
+    Ok(HttpResponse::Created().json(new_template))
+}
+
+#[derive(serde::Deserialize)]
+pub struct UpdateTemplateRequest {
+    pub default_unit: String,
+}
+
+#[actix_web::put("/api/inventory/templates/{template_id}")]
+pub async fn update_custom_item_template(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+    req: web::Json<UpdateTemplateRequest>,
+) -> Result<HttpResponse> {
+    let template_id_param = path.into_inner();
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    use crate::schema::custom_item_templates::dsl::{custom_item_templates, default_unit};
+    
+    diesel::update(custom_item_templates.find(template_id_param))
+        .set(default_unit.eq(&req.default_unit))
+        .execute(&mut conn)
+        .map_err(|e| {
+            eprintln!("Error updating template: {:?}", e);
+            actix_web::error::ErrorInternalServerError("Database error")
+        })?;
+        
+    Ok(HttpResponse::Ok().finish())
+}
+
+#[actix_web::delete("/api/inventory/templates/{template_id}")]
+pub async fn delete_custom_item_template(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+) -> Result<HttpResponse> {
+    let template_id_param = path.into_inner();
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    diesel::delete(crate::schema::custom_item_templates::table.find(template_id_param))
+        .execute(&mut conn)
+        .map_err(|e| {
+            eprintln!("Error deleting template: {:?}", e);
+            actix_web::error::ErrorInternalServerError("Database error")
+        })?;
+        
+    Ok(HttpResponse::Ok().finish())
+}
+
 #[actix_web::get("/api/inventory/search")]
 pub async fn search_inventory(
     pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
@@ -266,11 +406,13 @@ pub async fn search_inventory(
             .and_then(|data| serde_json::from_str::<ProductInfo>(&data).ok());
             
         ProductInfo {
+            id: Some(item.id),
             barcode: item.barcode,
             name: item.name,
             image_url: product_info.as_ref().and_then(|p| p.image_url.clone()),
             brand: product_info.as_ref().and_then(|p| p.brand.clone()),
             categories: product_info.map(|p| p.categories).unwrap_or_default(),
+            unit: Some(item.unit),
         }
     }).collect();
     
@@ -279,34 +421,101 @@ pub async fn search_inventory(
 
 #[actix_web::get("/api/search")]
 pub async fn search_product(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> Result<HttpResponse> {
     let search_query = query.get("q")
         .ok_or_else(|| actix_web::error::ErrorBadRequest("Query parameter 'q' required"))?;
+    let inv_id = query.get("inventory_id");
     
-    match openfoodfacts::search_products(search_query).await {
-        Ok(products) => Ok(HttpResponse::Ok().json(products)),
+    let mut conn = pool.get().expect("Failed to get DB connection");
+
+    // 1. Search OpenFoodFacts
+    let mut products = match openfoodfacts::search_products(search_query).await {
+        Ok(p) => p,
         Err(e) => {
             eprintln!("Search error: {:?}", e);
-            Ok(HttpResponse::InternalServerError().json(serde_json::json!({
-                "error": "Search failed"
-            })))
+            vec![]
+        }
+    };
+
+    // 2. If inventory_id provided, enrich products with existing config/unit
+    if let Some(inventory_id_param) = inv_id {
+        for product in products.iter_mut() {
+            // Check existing items
+            use crate::schema::inventory_items::dsl as ii;
+            let existing = ii::inventory_items
+                .filter(ii::inventory_id.eq(inventory_id_param))
+                .filter(ii::name.eq(&product.name).or(ii::barcode.eq(&product.barcode)))
+                .first::<InventoryItem>(&mut conn)
+                .ok();
+                
+            if let Some(item) = existing {
+                product.unit = Some(item.unit);
+            } else {
+                // Check templates
+                use crate::schema::custom_item_templates::dsl as ct;
+                let template = ct::custom_item_templates
+                    .filter(ct::inventory_id.eq(inventory_id_param).or(ct::inventory_id.is_null()))
+                    .filter(ct::name.eq(&product.name))
+                    .order(ct::inventory_id.desc())
+                    .first::<CustomItemTemplate>(&mut conn)
+                    .ok();
+                if let Some(t) = template {
+                    product.unit = Some(t.default_unit);
+                }
+            }
         }
     }
+    
+    Ok(HttpResponse::Ok().json(products))
 }
 
 #[actix_web::get("/api/product/{barcode}")]
 pub async fn get_item_by_barcode(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
     path: web::Path<String>,
+    query: web::Query<std::collections::HashMap<String, String>>,
 ) -> Result<HttpResponse> {
     let barcode_val = path.into_inner();
+    let inv_id = query.get("inventory_id");
     
-    match openfoodfacts::get_product_by_barcode(&barcode_val).await {
-        Ok(product) => Ok(HttpResponse::Ok().json(product)),
-        Err(_) => Ok(HttpResponse::NotFound().json(serde_json::json!({
+    let mut product = match openfoodfacts::get_product_by_barcode(&barcode_val).await {
+        Ok(p) => p,
+        Err(_) => return Ok(HttpResponse::NotFound().json(serde_json::json!({
             "error": "Product not found"
         })))
+    };
+
+    if let Some(inventory_id_param) = inv_id {
+        let mut conn = pool.get().expect("Failed to get DB connection");
+        
+        // Check existing items
+        use crate::schema::inventory_items::dsl as ii;
+        let existing = ii::inventory_items
+            .filter(ii::inventory_id.eq(inventory_id_param))
+            .filter(ii::barcode.eq(&barcode_val).or(ii::name.eq(&product.name)))
+            .first::<InventoryItem>(&mut conn)
+            .ok();
+            
+        if let Some(item) = existing {
+            product.unit = Some(item.unit);
+        } else {
+            // Check templates
+            use crate::schema::custom_item_templates::dsl as ct;
+            let template = ct::custom_item_templates
+                .filter(ct::inventory_id.eq(inventory_id_param).or(ct::inventory_id.is_null()))
+                .filter(ct::name.eq(&product.name))
+                .order(ct::inventory_id.desc())
+                .first::<CustomItemTemplate>(&mut conn)
+                .ok();
+            if let Some(t) = template {
+                product.unit = Some(t.default_unit);
+            }
+        }
     }
+    
+    Ok(HttpResponse::Ok().json(product))
 }
 
 // --- User & Inventory Management Handlers ---

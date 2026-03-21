@@ -52,6 +52,16 @@ pub fn main_menu(_props: &Props) -> Html {
         })
     };
 
+    let on_manage_custom_items_click = {
+        let navigator = navigator.clone();
+        let inventory_id = (*inventory_context.inventory_id).clone();
+        Callback::from(move |_| {
+            if let Some(ref id) = inventory_id {
+                navigator.push(&Route::CustomItems { id: id.clone() });
+            }
+        })
+    };
+
     let on_logout_click = {
         let user_context = user_context.clone();
         let inventory_context = inventory_context.clone();
@@ -134,6 +144,21 @@ pub fn main_menu(_props: &Props) -> Html {
                         <div class="ml-4 flex-1">
                             <h3 class="text-lg font-medium text-gray-900">{"Share Inventory"}</h3>
                             <p class="text-sm text-gray-500">{"Give others access to this list"}</p>
+                        </div>
+                    </button>
+
+                    <button
+                        onclick={on_manage_custom_items_click}
+                        class="w-full group relative flex items-center p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-purple-300 transition-all duration-200 text-left"
+                    >
+                        <div class="flex-shrink-0 h-12 w-12 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white transition-colors duration-200">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                            </svg>
+                        </div>
+                        <div class="ml-4 flex-1">
+                            <h3 class="text-lg font-medium text-gray-900">{"Manage Quick Items"}</h3>
+                            <p class="text-sm text-gray-500">{"Configure common items without barcodes"}</p>
                         </div>
                     </button>
 
