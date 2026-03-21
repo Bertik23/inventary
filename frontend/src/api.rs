@@ -58,6 +58,7 @@ pub struct ProductInfo {
 pub struct User {
     pub id: String,
     pub username: String,
+    pub email: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -70,7 +71,19 @@ pub struct Inventory {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AuthRequest {
     pub username: String,
+    pub email: Option<String>,
     pub password: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ForgotPasswordRequest {
+    pub email: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ResetPasswordRequest {
+    pub token: String,
+    pub new_password: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -119,6 +132,18 @@ pub async fn register_user(req: AuthRequest) -> Result<User, String> {
     fetch_json(&url, Some(&req)).await
 }
 
+pub async fn forgot_password(req: ForgotPasswordRequest) -> Result<(), String> {
+    let url = format!("{}/users/forgot-password", get_api_base());
+    let _: serde_json::Value = fetch_json(&url, Some(&req)).await?;
+    Ok(())
+}
+
+pub async fn reset_password(req: ResetPasswordRequest) -> Result<(), String> {
+    let url = format!("{}/users/reset-password", get_api_base());
+    let _: serde_json::Value = fetch_json(&url, Some(&req)).await?;
+    Ok(())
+}
+
 pub async fn get_user_inventories(user_id: &str) -> Result<Vec<Inventory>, String> {
     let url = format!("{}/users/{}/inventories", get_api_base(), user_id);
     fetch_json(&url, None::<&()>).await
@@ -133,6 +158,7 @@ pub async fn create_inventory(req: CreateInventoryRequest) -> Result<Inventory, 
 pub struct SharedUser {
     pub id: String,
     pub username: String,
+    pub email: String,
     pub role: String,
 }
 

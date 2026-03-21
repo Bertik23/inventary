@@ -1,4 +1,5 @@
 use crate::router::Route;
+use crate::app::{UserContext, InventoryContext};
 use yew::prelude::*;
 use yew_router::prelude::*;
 
@@ -8,6 +9,8 @@ pub struct Props {}
 #[function_component(MainMenu)]
 pub fn main_menu(_props: &Props) -> Html {
     let navigator = use_navigator().unwrap();
+    let user_context = use_context::<UserContext>().expect("UserContext not found");
+    let inventory_context = use_context::<InventoryContext>().expect("InventoryContext not found");
 
     let on_add_click = {
         let navigator = navigator.clone();
@@ -27,6 +30,36 @@ pub fn main_menu(_props: &Props) -> Html {
         let navigator = navigator.clone();
         Callback::from(move |_| {
             navigator.push(&Route::Inventory);
+        })
+    };
+
+    let on_share_click = {
+        let navigator = navigator.clone();
+        let inventory_id = (*inventory_context.inventory_id).clone();
+        Callback::from(move |_| {
+            if let Some(ref id) = inventory_id {
+                navigator.push(&Route::Share { id: id.clone() });
+            }
+        })
+    };
+
+    let on_manage_inventories_click = {
+        let navigator = navigator.clone();
+        let inventory_context = inventory_context.clone();
+        Callback::from(move |_| {
+            inventory_context.inventory_id.set(None);
+            navigator.push(&Route::Selection);
+        })
+    };
+
+    let on_logout_click = {
+        let user_context = user_context.clone();
+        let inventory_context = inventory_context.clone();
+        let navigator = navigator.clone();
+        Callback::from(move |_| {
+            user_context.user.set(None);
+            inventory_context.inventory_id.set(None);
+            navigator.push(&Route::Login);
         })
     };
 
@@ -88,6 +121,51 @@ pub fn main_menu(_props: &Props) -> Html {
                             <p class="text-sm text-gray-500">{"View full list of items"}</p>
                         </div>
                     </button>
+
+                    <button
+                        onclick={on_share_click}
+                        class="w-full group relative flex items-center p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-teal-300 transition-all duration-200 text-left"
+                    >
+                        <div class="flex-shrink-0 h-12 w-12 bg-teal-50 text-teal-600 rounded-lg flex items-center justify-center group-hover:bg-teal-600 group-hover:text-white transition-colors duration-200">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                            </svg>
+                        </div>
+                        <div class="ml-4 flex-1">
+                            <h3 class="text-lg font-medium text-gray-900">{"Share Inventory"}</h3>
+                            <p class="text-sm text-gray-500">{"Give others access to this list"}</p>
+                        </div>
+                    </button>
+
+                    <button
+                        onclick={on_manage_inventories_click}
+                        class="w-full group relative flex items-center p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-orange-300 transition-all duration-200 text-left"
+                    >
+                        <div class="flex-shrink-0 h-12 w-12 bg-orange-50 text-orange-600 rounded-lg flex items-center justify-center group-hover:bg-orange-600 group-hover:text-white transition-colors duration-200">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                            </svg>
+                        </div>
+                        <div class="ml-4 flex-1">
+                            <h3 class="text-lg font-medium text-gray-900">{"Manage Inventories"}</h3>
+                            <p class="text-sm text-gray-500">{"Switch or create new inventories"}</p>
+                        </div>
+                    </button>
+
+                    <button
+                        onclick={on_logout_click}
+                        class="w-full group relative flex items-center p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-gray-400 transition-all duration-200 text-left"
+                    >
+                        <div class="flex-shrink-0 h-12 w-12 bg-gray-50 text-gray-600 rounded-lg flex items-center justify-center group-hover:bg-gray-600 group-hover:text-white transition-colors duration-200">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                            </svg>
+                        </div>
+                        <div class="ml-4 flex-1">
+                            <h3 class="text-lg font-medium text-gray-900">{"Logout"}</h3>
+                            <p class="text-sm text-gray-500">{"Sign out of your account"}</p>
+                        </div>
+                    </button>
                 </div>
 
                 <div class="text-center pt-8">
@@ -97,3 +175,4 @@ pub fn main_menu(_props: &Props) -> Html {
         </div>
     }
 }
+

@@ -37,11 +37,22 @@ pub fn inventory_selection(_props: &Props) -> Html {
         let loading = loading.clone();
         let error = error.clone();
         let user_id = user_id.clone();
+        let inventory_context = inventory_context.clone();
+        let navigator = navigator.clone();
 
         use_effect_with((), move |_| {
             wasm_bindgen_futures::spawn_local(async move {
                 match get_user_inventories(&user_id).await {
                     Ok(invs) => {
+                        // Check if we already have an inventory_id set and it exists in user inventories
+                        let current_id = (*inventory_context.inventory_id).clone();
+                        if let Some(id) = current_id {
+                            if invs.iter().any(|inv| inv.id == id) {
+                                navigator.push(&Route::MainMenu);
+                                return;
+                            }
+                        }
+
                         inventories.set(invs);
                         loading.set(false);
                     }
@@ -97,7 +108,28 @@ pub fn inventory_selection(_props: &Props) -> Html {
     html! {
         <div class="min-h-screen bg-gray-50 p-4">
             <div class="max-w-md mx-auto">
-                <h1 class="text-2xl font-bold text-gray-900 mb-6">{"My Inventories"}</h1>
+                <div class="flex justify-between items-center mb-6">
+                    <h1 class="text-2xl font-bold text-gray-900">{"My Inventories"}</h1>
+                    <button 
+                        onclick={
+                            let user_context = user_context.clone();
+                            let inventory_context = inventory_context.clone();
+                            let navigator = navigator.clone();
+                            Callback::from(move |_| {
+                                user_context.user.set(None);
+                                inventory_context.inventory_id.set(None);
+                                navigator.push(&Route::Login);
+                            })
+                        }
+                        class="p-2 text-gray-500 hover:text-red-600 transition flex items-center gap-1 text-sm font-medium"
+                        title="Logout"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        {"Logout"}
+                    </button>
+                </div>
 
                 if let Some(ref err) = *error {
                     <div class="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">{err}</div>

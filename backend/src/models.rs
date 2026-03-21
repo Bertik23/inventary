@@ -56,8 +56,13 @@ pub struct ProductInfo {
 pub struct User {
     pub id: String,
     pub username: String,
+    pub email: String,
     #[serde(skip)]
     pub password_hash: String,
+    #[serde(skip)]
+    pub reset_token: Option<String>,
+    #[serde(skip)]
+    pub reset_token_expiry: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
 }
 
@@ -66,7 +71,19 @@ pub struct User {
 pub struct NewUser {
     pub id: String,
     pub username: String,
+    pub email: String,
     pub password_hash: String,
+}
+
+#[derive(Deserialize)]
+pub struct ForgotPasswordRequest {
+    pub email: String,
+}
+
+#[derive(Deserialize)]
+pub struct ResetPasswordRequest {
+    pub token: String,
+    pub new_password: String,
 }
 
 // Inventory Models
@@ -105,5 +122,6 @@ pub struct NewInventoryUser {
 pub struct SharedUser {
     pub id: String,
     pub username: String,
+    pub email: String,
     pub role: String,
 }

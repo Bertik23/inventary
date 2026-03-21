@@ -34,7 +34,10 @@ diesel::table! {
     users (id) {
         id -> Text,
         username -> Text,
+        email -> Text,
         password_hash -> Text,
+        reset_token -> Nullable<Text>,
+        reset_token_expiry -> Nullable<Timestamp>,
         created_at -> Timestamp,
     }
 }

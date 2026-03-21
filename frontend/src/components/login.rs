@@ -1,4 +1,4 @@
-use crate::api::{login_user, register_user, AuthRequest, get_api_base, set_api_base};
+use crate::api::{login_user, register_user, forgot_password, AuthRequest, ForgotPasswordRequest, get_api_base, set_api_base};
 use crate::app::UserContext;
 use crate::router::Route;
 use web_sys::HtmlInputElement;
@@ -11,24 +11,41 @@ pub struct Props {}
 #[function_component(Login)]
 pub fn login(_props: &Props) -> Html {
     let username = use_state(|| String::new());
+    let email = use_state(|| String::new());
     let password = use_state(|| String::new());
     let api_base = use_state(get_api_base);
     let show_settings = use_state(|| false);
     let error = use_state(|| Option::<String>::None);
+    let message = use_state(|| Option::<String>::None);
     let loading = use_state(|| false);
     let is_registering = use_state(|| false);
+    let is_forgot_password = use_state(|| false);
 
     let user_context =
         use_context::<UserContext>().expect("UserContext not found");
     let navigator = use_navigator().unwrap();
 
+    // Redirect if already logged in
+    {
+        let user = user_context.user.clone();
+        let navigator = navigator.clone();
+        use_effect_with(user, move |user| {
+            if user.is_some() {
+                navigator.push(&Route::Selection);
+            }
+        });
+    }
+
     let on_submit = {
         let username = username.clone();
+        let email = email.clone();
         let password = password.clone();
         let api_base = api_base.clone();
         let error = error.clone();
+        let message = message.clone();
         let loading = loading.clone();
         let is_registering = is_registering.clone();
+        let is_forgot_password = is_forgot_password.clone();
 
         let user_context = user_context.clone();
         let navigator = navigator.clone();
@@ -36,12 +53,25 @@ pub fn login(_props: &Props) -> Html {
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
             let username_str = (*username).clone();
+            let email_str = (*email).clone();
             let password_str = (*password).clone();
             let api_base_str = (*api_base).clone();
 
-            if username_str.is_empty() || password_str.is_empty() {
-                error.set(Some("Please fill in all fields".to_string()));
-                return;
+            if *is_forgot_password {
+                if email_str.is_empty() {
+                    error.set(Some("Please enter your email".to_string()));
+                    return;
+                }
+            } else if *is_registering {
+                if username_str.is_empty() || email_str.is_empty() || password_str.is_empty() {
+                    error.set(Some("Please fill in all fields".to_string()));
+                    return;
+                }
+            } else {
+                if username_str.is_empty() || password_str.is_empty() {
+                    error.set(Some("Please fill in all fields".to_string()));
+                    return;
+                }
             }
 
             // Save API base before continuing
@@ -49,34 +79,46 @@ pub fn login(_props: &Props) -> Html {
 
             loading.set(true);
             error.set(None);
-
-            let req = AuthRequest {
-                username: username_str,
-                password: password_str,
-            };
+            message.set(None);
 
             let is_reg = *is_registering;
+            let is_forgot = *is_forgot_password;
             let error = error.clone();
+            let message = message.clone();
             let loading = loading.clone();
             let user_context = user_context.clone();
             let navigator = navigator.clone();
 
             wasm_bindgen_futures::spawn_local(async move {
-                let result = if is_reg {
-                    register_user(req).await
-                } else {
-                    login_user(req).await
-                };
-
-                loading.set(false);
-
-                match result {
-                    Ok(user) => {
-                        user_context.user.set(Some(user));
-                        navigator.push(&Route::Selection);
+                if is_forgot {
+                    match forgot_password(ForgotPasswordRequest { email: email_str }).await {
+                        Ok(_) => {
+                            message.set(Some("If that email exists in our system, a reset link has been sent.".to_string()));
+                        }
+                        Err(e) => error.set(Some(e)),
                     }
-                    Err(e) => error.set(Some(e)),
+                } else {
+                    let req = AuthRequest {
+                        username: username_str,
+                        email: if is_reg { Some(email_str) } else { None },
+                        password: password_str,
+                    };
+
+                    let result = if is_reg {
+                        register_user(req).await
+                    } else {
+                        login_user(req).await
+                    };
+
+                    match result {
+                        Ok(user) => {
+                            user_context.user.set(Some(user));
+                            navigator.push(&Route::Selection);
+                        }
+                        Err(e) => error.set(Some(e)),
+                    }
                 }
+                loading.set(false);
             });
         })
     };
@@ -87,10 +129,10 @@ pub fn login(_props: &Props) -> Html {
                 <div class="flex justify-between items-start mb-8">
                     <div class="text-left">
                         <h1 class="text-2xl font-bold text-gray-900">
-                            {if *is_registering { "Create Account" } else { "Welcome Back" }}
+                            {if *is_forgot_password { "Reset Password" } else if *is_registering { "Create Account" } else { "Welcome Back" }}
                         </h1>
                         <p class="text-gray-500 mt-2">
-                            {if *is_registering { "Sign up to manage your inventory" } else { "Sign in to your account" }}
+                            {if *is_forgot_password { "Enter your email to receive a reset link" } else if *is_registering { "Sign up to manage your inventory" } else { "Sign in to your account" }}
                         </p>
                     </div>
                     <button 
@@ -134,54 +176,124 @@ pub fn login(_props: &Props) -> Html {
                     </div>
                 }
 
+                if let Some(ref msg) = *message {
+                    <div class="mb-4 p-3 bg-green-100 text-green-700 rounded-lg text-sm">
+                        {msg}
+                    </div>
+                }
+
                 <form onsubmit={on_submit} class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">{"Username"}</label>
-                        <input
-                            type="text"
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                            value={(*username).clone()}
-                            oninput={Callback::from(move |e: InputEvent| {
-                                let input: HtmlInputElement = e.target_unchecked_into();
-                                username.set(input.value());
-                            })}
-                            disabled={*loading}
-                        />
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">{"Password"}</label>
-                        <input
-                            type="password"
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                            value={(*password).clone()}
-                            oninput={Callback::from(move |e: InputEvent| {
-                                let input: HtmlInputElement = e.target_unchecked_into();
-                                password.set(input.value());
-                            })}
-                            disabled={*loading}
-                        />
-                    </div>
+                    if !*is_forgot_password {
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{"Username"}</label>
+                            <input
+                                type="text"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                value={(*username).clone()}
+                                oninput={Callback::from(move |e: InputEvent| {
+                                    let input: HtmlInputElement = e.target_unchecked_into();
+                                    username.set(input.value());
+                                })}
+                                disabled={*loading}
+                            />
+                        </div>
+                    }
+                    if *is_forgot_password || *is_registering {
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{"Email"}</label>
+                            <input
+                                type="email"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                value={(*email).clone()}
+                                oninput={Callback::from(move |e: InputEvent| {
+                                    let input: HtmlInputElement = e.target_unchecked_into();
+                                    email.set(input.value());
+                                })}
+                                disabled={*loading}
+                            />
+                        </div>
+                    }
+                    if !*is_forgot_password {
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="block text-sm font-medium text-gray-700">{"Password"}</label>
+                                if !*is_registering {
+                                    <button 
+                                        type="button"
+                                        class="text-xs text-blue-600 hover:text-blue-800"
+                                        onclick={
+                                            let is_forgot_password = is_forgot_password.clone();
+                                            let error = error.clone();
+                                            let message = message.clone();
+                                            Callback::from(move |_| {
+                                                is_forgot_password.set(true);
+                                                error.set(None);
+                                                message.set(None);
+                                            })
+                                        }
+                                    >
+                                        {"Forgot password?"}
+                                    </button>
+                                }
+                            </div>
+                            <input
+                                type="password"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                value={(*password).clone()}
+                                oninput={Callback::from(move |e: InputEvent| {
+                                    let input: HtmlInputElement = e.target_unchecked_into();
+                                    password.set(input.value());
+                                })}
+                                disabled={*loading}
+                            />
+                        </div>
+                    }
 
                     <button
                         type="submit"
                         class="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
                         disabled={*loading}
                     >
-                        {if *loading { "Please wait..." } else if *is_registering { "Sign Up" } else { "Sign In" }}
+                        {if *loading { "Please wait..." } else if *is_forgot_password { "Send Reset Link" } else if *is_registering { "Sign Up" } else { "Sign In" }}
                     </button>
                 </form>
 
-                <div class="mt-6 text-center">
-                    <button
-                        class="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                        onclick={
-                            let is_registering = is_registering.clone();
-                            Callback::from(move |_| is_registering.set(!*is_registering))
-                        }
-                        disabled={*loading}
-                    >
-                        {if *is_registering { "Already have an account? Sign in" } else { "Don't have an account? Sign up" }}
-                    </button>
+                <div class="mt-6 text-center space-y-2">
+                    if *is_forgot_password {
+                        <button
+                            class="text-sm text-blue-600 hover:text-blue-800 font-medium block w-full"
+                            onclick={
+                                let is_forgot_password = is_forgot_password.clone();
+                                let error = error.clone();
+                                let message = message.clone();
+                                Callback::from(move |_| {
+                                    is_forgot_password.set(false);
+                                    error.set(None);
+                                    message.set(None);
+                                })
+                            }
+                            disabled={*loading}
+                        >
+                            {"Back to Sign In"}
+                        </button>
+                    } else {
+                        <button
+                            class="text-sm text-blue-600 hover:text-blue-800 font-medium block w-full"
+                            onclick={
+                                let is_registering = is_registering.clone();
+                                let error = error.clone();
+                                let message = message.clone();
+                                Callback::from(move |_| {
+                                    is_registering.set(!*is_registering);
+                                    error.set(None);
+                                    message.set(None);
+                                })
+                            }
+                            disabled={*loading}
+                        >
+                            {if *is_registering { "Already have an account? Sign in" } else { "Don't have an account? Sign up" }}
+                        </button>
+                    }
                 </div>
             </div>
         </div>

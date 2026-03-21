@@ -52,6 +52,8 @@ async fn main() -> std::io::Result<()> {
                 .service(handlers::get_item_by_barcode)
                 .service(handlers::register_user)
                 .service(handlers::login_user)
+                .service(handlers::forgot_password)
+                .service(handlers::reset_password)
                 .service(handlers::create_inventory)
                 .service(handlers::get_user_inventories)
                 .service(handlers::share_inventory)

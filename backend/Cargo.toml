@@ -20,3 +20,4 @@ log = "0.4"
 bcrypt = "0.15"
 uuid = { version = "1.6", features = ["v4", "serde"] }
 urlencoding = "2.1"
+lettre = "0.11"

@@ -5,8 +5,52 @@ use crate::models::*;
 use crate::schema::inventory_items;
 use crate::openfoodfacts;
 use uuid::Uuid;
-use chrono::Utc;
+use chrono::{Utc, Duration};
 use serde_json;
+use bcrypt::{hash, verify, DEFAULT_COST};
+use lettre::transport::smtp::authentication::Credentials;
+use lettre::{Message, SmtpTransport, Transport};
+use std::env;
+
+fn send_reset_email(to_email: &str, token: &str) -> Result<(), String> {
+    let smtp_server = env::var("SMTP_SERVER").unwrap_or_else(|_| "localhost".to_string());
+    let smtp_user = env::var("SMTP_USER").unwrap_or_else(|_| "".to_string());
+    let smtp_pass = env::var("SMTP_PASS").unwrap_or_else(|_| "".to_string());
+    let smtp_port = env::var("SMTP_PORT").unwrap_or_else(|_| "587".to_string()).parse::<u16>().unwrap_or(587);
+    let from_email = env::var("FROM_EMAIL").unwrap_or_else(|_| "noreply@example.com".to_string());
+    let app_url = env::var("APP_URL").unwrap_or_else(|_| "http://localhost:8081".to_string());
+
+    let email = Message::builder()
+        .from(from_email.parse().unwrap())
+        .to(to_email.parse().unwrap())
+        .subject("Password Reset Request")
+        .body(format!(
+            "To reset your password, click the following link: {}/reset-password?token={}\n\nThis link will expire in 1 hour.",
+            app_url, token
+        ))
+        .map_err(|e| e.to_string())?;
+
+    if smtp_user.is_empty() {
+        println!("SMTP_USER not set, printing reset email to console:");
+        println!("To: {}", to_email);
+        println!("Subject: Password Reset Request");
+        println!("Body: To reset your password, click the following link: {}/reset-password?token={}", app_url, token);
+        return Ok(());
+    }
+
+    let creds = Credentials::new(smtp_user, smtp_pass);
+
+    let mailer = SmtpTransport::relay(&smtp_server)
+        .unwrap()
+        .port(smtp_port)
+        .credentials(creds)
+        .build();
+
+    match mailer.send(&email) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("Could not send email: {:?}", e)),
+    }
+}
 
 #[actix_web::get("/api/inventory")]
 pub async fn show_inventory(
@@ -270,6 +314,7 @@ pub async fn get_item_by_barcode(
 #[derive(serde::Deserialize)]
 pub struct CreateUserRequest {
     pub username: String,
+    pub email: String,
     pub password: String,
 }
 
@@ -280,12 +325,15 @@ pub async fn register_user(
 ) -> Result<HttpResponse> {
     let mut conn = pool.get().expect("Failed to get DB connection");
     
-    // Note: In a real app, use argon2 to hash the password here
-    let password_hash = format!("HASHED_{}", req.password); 
+    let password_hash = hash(&req.password, DEFAULT_COST).map_err(|e| {
+        eprintln!("Hashing error: {:?}", e);
+        actix_web::error::ErrorInternalServerError("Internal server error")
+    })?;
     
     let new_user = NewUser {
         id: Uuid::new_v4().to_string(),
         username: req.username.clone(),
+        email: req.email.clone(),
         password_hash,
     };
     
@@ -294,10 +342,10 @@ pub async fn register_user(
         .execute(&mut conn)
         .map_err(|e| {
             eprintln!("Error creating user: {:?}", e);
-            actix_web::error::ErrorInternalServerError("Username likely taken")
+            actix_web::error::ErrorInternalServerError("Username or email likely taken")
         })?;
         
-    Ok(HttpResponse::Created().json(serde_json::json!({"id": new_user.id, "username": new_user.username})))
+    Ok(HttpResponse::Created().json(serde_json::json!({"id": new_user.id, "username": new_user.username, "email": new_user.email})))
 }
 
 #[derive(serde::Deserialize)]
@@ -342,6 +390,7 @@ pub async fn create_inventory(
 #[derive(serde::Deserialize)]
 pub struct LoginRequest {
     pub username: String,
+    pub email: Option<String>,
     pub password: String,
 }
 
@@ -359,13 +408,86 @@ pub async fn login_user(
         .first::<User>(&mut conn)
         .map_err(|_| actix_web::error::ErrorUnauthorized("Invalid credentials"))?;
         
-    // Simple hash check (matching register_user logic)
-    let expected_hash = format!("HASHED_{}", req.password);
-    if user.password_hash != expected_hash {
+    if !verify(&req.password, &user.password_hash).unwrap_or(false) {
         return Err(actix_web::error::ErrorUnauthorized("Invalid credentials"));
     }
     
-    Ok(HttpResponse::Ok().json(serde_json::json!({"id": user.id, "username": user.username})))
+    Ok(HttpResponse::Ok().json(serde_json::json!({"id": user.id, "username": user.username, "email": user.email})))
+}
+
+#[actix_web::post("/api/users/forgot-password")]
+pub async fn forgot_password(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    req: web::Json<ForgotPasswordRequest>,
+) -> Result<HttpResponse> {
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    use crate::schema::users::dsl::*;
+    
+    let user = users
+        .filter(email.eq(&req.email))
+        .first::<User>(&mut conn)
+        .ok();
+        
+    if let Some(user_val) = user {
+        let token = Uuid::new_v4().to_string();
+        let expiry = Utc::now().naive_utc() + Duration::hours(1);
+        
+        diesel::update(users.find(&user_val.id))
+            .set((
+                reset_token.eq(Some(&token)),
+                reset_token_expiry.eq(Some(expiry)),
+            ))
+            .execute(&mut conn)
+            .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+            
+        if let Err(e) = send_reset_email(&user_val.email, &token) {
+            eprintln!("Email error: {}", e);
+            // Don't return error to user for security (not leaking email existence)
+        }
+    }
+    
+    // Always return OK to avoid account enumeration
+    Ok(HttpResponse::Ok().json(serde_json::json!({"message": "If that email exists in our system, a reset link has been sent."})))
+}
+
+#[actix_web::post("/api/users/reset-password")]
+pub async fn reset_password(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    req: web::Json<ResetPasswordRequest>,
+) -> Result<HttpResponse> {
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    use crate::schema::users::dsl::*;
+    
+    let user = users
+        .filter(reset_token.eq(&req.token))
+        .first::<User>(&mut conn)
+        .map_err(|_| actix_web::error::ErrorBadRequest("Invalid or expired token"))?;
+        
+    if let Some(expiry) = user.reset_token_expiry {
+        if expiry < Utc::now().naive_utc() {
+            return Err(actix_web::error::ErrorBadRequest("Token expired"));
+        }
+    } else {
+        return Err(actix_web::error::ErrorBadRequest("Invalid token"));
+    }
+    
+    let new_password_hash = hash(&req.new_password, DEFAULT_COST).map_err(|e| {
+        eprintln!("Hashing error: {:?}", e);
+        actix_web::error::ErrorInternalServerError("Internal server error")
+    })?;
+    
+    diesel::update(users.find(&user.id))
+        .set((
+            password_hash.eq(new_password_hash),
+            reset_token.eq(None::<String>),
+            reset_token_expiry.eq(None::<chrono::NaiveDateTime>),
+        ))
+        .execute(&mut conn)
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        
+    Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Password updated successfully"})))
 }
 
 #[actix_web::get("/api/users/{user_id}/inventories")]
@@ -453,7 +575,7 @@ pub async fn get_inventory_users(
     let results = iu::inventory_users
         .inner_join(u::users.on(iu::user_id.eq(u::id)))
         .filter(iu::inventory_id.eq(inventory_id_param))
-        .select((u::id, u::username, iu::role))
+        .select((u::id, u::username, u::email, iu::role))
         .load::<SharedUser>(&mut conn)
         .map_err(|e| {
             eprintln!("Error loading inventory users: {:?}", e);

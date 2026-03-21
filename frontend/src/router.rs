@@ -15,6 +15,8 @@ pub enum Route {
     Remove,
     #[at("/selection")]
     Selection,
+    #[at("/reset-password")]
+    ResetPassword,
     #[at("/inventories/:id/share")]
     Share { id: String },
 }
@@ -34,6 +36,9 @@ pub fn switch(routes: Route) -> Html {
         }
         Route::Selection => {
             html! { <crate::components::inventory_selection::InventorySelection /> }
+        }
+        Route::ResetPassword => {
+            html! { <crate::components::reset_password::ResetPassword /> }
         }
         Route::Share { id } => {
             html! { <crate::components::share_inventory::ShareInventory inventory_id={id} /> }
