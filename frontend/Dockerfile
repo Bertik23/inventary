@@ -1,10 +1,10 @@
 # Build stage
-FROM rust:1.83-slim-bullseye as builder
+FROM rust:1.85-slim-bullseye as builder
 
 # Install trunk and wasm-target
-RUN apt-get update && apt-get install -y pkg-config libssl-dev && \
-    cargo install trunk && \
-    rustup target add wasm32-unknown-unknown
+RUN apt-get update && apt-get install -y pkg-config libssl-dev curl && \
+    rustup target add wasm32-unknown-unknown && \
+    curl -L https://github.com/trunk-rs/trunk/releases/latest/download/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xzf- -C /usr/local/bin
 
 WORKDIR /app
 COPY . .
