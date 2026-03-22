@@ -1014,6 +1014,13 @@ pub async fn process_pending_product(
         }
     }
     
+    if req.action == "off" {
+        if let Err(e) = openfoodfacts::contribute_product(&barcode_param, &req.name, req.brand.as_deref()).await {
+            eprintln!("OFF contribution error: {:?}", e);
+            return Err(actix_web::error::ErrorInternalServerError(format!("OFF contribution failed: {}", e)));
+        }
+    }
+
     let result: Result<(), diesel::result::Error> = conn.transaction(|conn| {
         match req.action.as_str() {
             "local" => {
@@ -1061,6 +1068,115 @@ pub async fn process_pending_product(
             Err(actix_web::error::ErrorInternalServerError(e.to_string()))
         }
     }
+}
+
+#[actix_web::get("/api/admin/custom-products")]
+pub async fn list_custom_products(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> Result<HttpResponse> {
+    let admin_id = query.get("admin_id")
+        .ok_or_else(|| actix_web::error::ErrorBadRequest("admin_id required"))?;
+        
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    // Check if requester is admin or moderator
+    {
+        use crate::schema::users::dsl::*;
+        let requester = users.find(admin_id)
+            .first::<User>(&mut conn)
+            .map_err(|_| actix_web::error::ErrorUnauthorized("Unauthorized"))?;
+            
+        if requester.role != "admin" && requester.role != "moderator" {
+            return Err(actix_web::error::ErrorForbidden("Moderator access required"));
+        }
+    }
+    
+    use crate::schema::custom_products::dsl::*;
+    let products = custom_products
+        .load::<CustomProduct>(&mut conn)
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        
+    Ok(HttpResponse::Ok().json(products))
+}
+
+#[actix_web::put("/api/admin/custom-products/{barcode_param}")]
+pub async fn update_custom_product(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+    req: web::Json<UpdateCustomProductRequest>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> Result<HttpResponse> {
+    let barcode_val = path.into_inner();
+    let admin_id = query.get("admin_id")
+        .ok_or_else(|| actix_web::error::ErrorBadRequest("admin_id required"))?;
+        
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    // Check role
+    {
+        use crate::schema::users::dsl::*;
+        let requester = users.find(admin_id)
+            .first::<User>(&mut conn)
+            .map_err(|_| actix_web::error::ErrorUnauthorized("Unauthorized"))?;
+            
+        if requester.role != "admin" && requester.role != "moderator" {
+            return Err(actix_web::error::ErrorForbidden("Moderator access required"));
+        }
+    }
+
+    if let Some(ref action_val) = req.action {
+        if action_val == "off" {
+            if let Err(e) = openfoodfacts::contribute_product(&barcode_val, &req.name, req.brand.as_deref()).await {
+                eprintln!("OFF contribution error: {:?}", e);
+                return Err(actix_web::error::ErrorInternalServerError(format!("OFF contribution failed: {}", e)));
+            }
+        }
+    }
+    
+    use crate::schema::custom_products::dsl::*;
+    diesel::update(custom_products.find(&barcode_val))
+        .set((
+            name.eq(&req.name),
+            brand.eq(&req.brand),
+            unit.eq(&req.unit),
+        ))
+        .execute(&mut conn)
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        
+    Ok(HttpResponse::Ok().finish())
+}
+
+#[actix_web::delete("/api/admin/custom-products/{barcode_param}")]
+pub async fn delete_custom_product(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> Result<HttpResponse> {
+    let barcode_val = path.into_inner();
+    let admin_id = query.get("admin_id")
+        .ok_or_else(|| actix_web::error::ErrorBadRequest("admin_id required"))?;
+        
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    
+    // Check role
+    {
+        use crate::schema::users::dsl::*;
+        let requester = users.find(admin_id)
+            .first::<User>(&mut conn)
+            .map_err(|_| actix_web::error::ErrorUnauthorized("Unauthorized"))?;
+            
+        if requester.role != "admin" && requester.role != "moderator" {
+            return Err(actix_web::error::ErrorForbidden("Moderator access required"));
+        }
+    }
+    
+    use crate::schema::custom_products::dsl::*;
+    diesel::delete(custom_products.find(&barcode_val))
+        .execute(&mut conn)
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        
+    Ok(HttpResponse::Ok().finish())
 }
 
 #[actix_web::delete("/api/admin/users/{user_id}")]

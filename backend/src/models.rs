@@ -196,6 +196,14 @@ pub struct NewCustomProduct {
     pub unit: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct UpdateCustomProductRequest {
+    pub name: String,
+    pub brand: Option<String>,
+    pub unit: Option<String>,
+    pub action: Option<String>, // Some("off") to contribute
+}
+
 // Pending Product Models (Buffer for admin review)
 #[derive(Queryable, Serialize, Deserialize, Clone)]
 pub struct PendingProduct {

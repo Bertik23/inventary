@@ -299,6 +299,24 @@ pub struct PendingProduct {
     pub created_at: String,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct CustomProduct {
+    pub barcode: String,
+    pub name: String,
+    pub brand: Option<String>,
+    pub image_url: Option<String>,
+    pub unit: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct UpdateCustomProductRequest {
+    pub name: String,
+    pub brand: Option<String>,
+    pub unit: Option<String>,
+    pub action: Option<String>,
+}
+
 pub async fn buffer_unknown_product(req: BufferProductRequest) -> Result<(), String> {
     let url = format!("{}/products/buffer", get_api_base());
     fetch_json(&url, Some(&req)).await
@@ -312,6 +330,21 @@ pub async fn list_pending_products(admin_id: &str) -> Result<Vec<PendingProduct>
 pub async fn process_pending_product(admin_id: &str, barcode: &str, req: ProcessProductRequest) -> Result<(), String> {
     let url = format!("{}/admin/products/{}/process?admin_id={}", get_api_base(), barcode, admin_id);
     fetch_json(&url, Some(&req)).await
+}
+
+pub async fn list_custom_products(admin_id: &str) -> Result<Vec<CustomProduct>, String> {
+    let url = format!("{}/admin/custom-products?admin_id={}", get_api_base(), admin_id);
+    fetch_json(&url, None::<&()>).await
+}
+
+pub async fn update_custom_product(admin_id: &str, barcode: &str, req: UpdateCustomProductRequest) -> Result<(), String> {
+    let url = format!("{}/admin/custom-products/{}?admin_id={}", get_api_base(), barcode, admin_id);
+    fetch_put(&url, Some(&req)).await
+}
+
+pub async fn delete_custom_product(admin_id: &str, barcode: &str) -> Result<(), String> {
+    let url = format!("{}/admin/custom-products/{}?admin_id={}", get_api_base(), barcode, admin_id);
+    fetch_delete(&url, None::<&()>).await
 }
 
 pub async fn get_user_inventories(user_id: &str) -> Result<Vec<Inventory>, String> {

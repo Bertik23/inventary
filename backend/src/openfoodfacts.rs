@@ -1,5 +1,6 @@
 use crate::models::ProductInfo;
 use serde_json::Value;
+use std::env;
 
 const OPENFOODFACTS_API_BASE: &str = "https://world.openfoodfacts.org";
 
@@ -185,4 +186,39 @@ pub async fn search_products(query: &str) -> Result<Vec<ProductInfo>, Box<dyn st
     }
     
     Ok(results)
+}
+
+/// Contribute a product to OpenFoodFacts
+/// Documentation: https://openfoodfacts.github.io/openfoodfacts-server/api/tutorial-off-api/
+pub async fn contribute_product(
+    barcode: &str,
+    name: &str,
+    brand: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let username = env::var("OFF_USERNAME").map_err(|_| "OFF_USERNAME not set")?;
+    let password = env::var("OFF_PASSWORD").map_err(|_| "OFF_PASSWORD not set")?;
+
+    let url = format!("{}/cgi/product_jqm2.pl", OPENFOODFACTS_API_BASE);
+    
+    let mut params = std::collections::HashMap::new();
+    params.insert("code", barcode.to_string());
+    params.insert("product_name", name.to_string());
+    params.insert("user_id", username);
+    params.insert("password", password);
+    
+    if let Some(b) = brand {
+        params.insert("brands", b.to_string());
+    }
+
+    let client = create_client();
+    let response = client.post(&url)
+        .form(&params)
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        return Err(format!("OFF contribution failed: {}", response.status()).into());
+    }
+
+    Ok(())
 }

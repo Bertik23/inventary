@@ -1,7 +1,9 @@
 use crate::api::{
     list_users, update_user_role, admin_update_user, admin_reset_password, admin_delete_user,
     list_pending_products, process_pending_product,
-    User, AdminUpdateUserRequest, AdminResetPasswordRequest, PendingProduct, ProcessProductRequest
+    list_custom_products, update_custom_product, delete_custom_product,
+    User, AdminUpdateUserRequest, AdminResetPasswordRequest, PendingProduct, ProcessProductRequest,
+    CustomProduct, UpdateCustomProductRequest
 };
 use crate::app::UserContext;
 use crate::router::Route;
@@ -17,12 +19,15 @@ enum AdminAction {
     ResetPassword(User),
     Delete(User),
     ProcessProduct(PendingProduct),
+    EditLocalProduct(CustomProduct),
+    DeleteLocalProduct(CustomProduct),
 }
 
 #[derive(Clone, PartialEq)]
 enum AdminTab {
     Users,
     PendingProducts,
+    LocalProducts,
 }
 
 #[function_component(Admin)]
@@ -41,8 +46,11 @@ pub fn admin() -> Html {
 
     let is_admin = current_user.role == "admin";
     let active_tab = use_state(|| if is_admin { AdminTab::Users } else { AdminTab::PendingProducts });
+    
     let users = use_state(|| Vec::<User>::new());
     let pending_products = use_state(|| Vec::<PendingProduct>::new());
+    let local_products = use_state(|| Vec::<CustomProduct>::new());
+    
     let loading = use_state(|| true);
     let error = use_state(|| Option::<String>::None);
     let message = use_state(|| Option::<String>::None);
@@ -59,6 +67,7 @@ pub fn admin() -> Html {
     let fetch_data = {
         let users = users.clone();
         let pending_products = pending_products.clone();
+        let local_products = local_products.clone();
         let loading = loading.clone();
         let error = error.clone();
         let admin_id = current_user.id.clone();
@@ -67,6 +76,7 @@ pub fn admin() -> Html {
         Callback::from(move |_| {
             let users = users.clone();
             let pending_products = pending_products.clone();
+            let local_products = local_products.clone();
             let loading = loading.clone();
             let error = error.clone();
             let admin_id = admin_id.clone();
@@ -84,6 +94,12 @@ pub fn admin() -> Html {
                     AdminTab::PendingProducts => {
                         match list_pending_products(&admin_id).await {
                             Ok(p) => pending_products.set(p),
+                            Err(e) => error.set(Some(e)),
+                        }
+                    },
+                    AdminTab::LocalProducts => {
+                        match list_custom_products(&admin_id).await {
+                            Ok(p) => local_products.set(p),
                             Err(e) => error.set(Some(e)),
                         }
                     }
@@ -213,6 +229,83 @@ pub fn admin() -> Html {
         })
     };
 
+    let on_submit_edit_local = {
+        let admin_id = current_user.id.clone();
+        let action = action.clone();
+        let process_name = process_name.clone();
+        let process_brand = process_brand.clone();
+        let process_unit = process_unit.clone();
+        let fetch_data = fetch_data.clone();
+        let message = message.clone();
+        let error = error.clone();
+        let i18n = i18n.clone();
+
+        Callback::from(move |e: SubmitEvent| {
+            e.prevent_default();
+            if let AdminAction::EditLocalProduct(ref product) = *action {
+                let admin_id = admin_id.clone();
+                let barcode = product.barcode.clone();
+                let name = (*process_name).clone();
+                let brand = (*process_brand).clone();
+                let unit = (*process_unit).clone();
+                let action = action.clone();
+                let fetch_data = fetch_data.clone();
+                let message = message.clone();
+                let error = error.clone();
+                let i18n = i18n.clone();
+
+                wasm_bindgen_futures::spawn_local(async move {
+                    let req = UpdateCustomProductRequest {
+                        name,
+                        brand: if brand.is_empty() { None } else { Some(brand) },
+                        unit: if unit.is_empty() { None } else { Some(unit) },
+                        action: None,
+                    };
+                    match update_custom_product(&admin_id, &barcode, req).await {
+                        Ok(_) => {
+                            message.set(Some(i18n.t("admin.processed_success")));
+                            action.set(AdminAction::None);
+                            fetch_data.emit(());
+                        }
+                        Err(e) => error.set(Some(e)),
+                    }
+                });
+            }
+        })
+    };
+
+    let on_confirm_delete_local = {
+        let admin_id = current_user.id.clone();
+        let action = action.clone();
+        let fetch_data = fetch_data.clone();
+        let message = message.clone();
+        let error = error.clone();
+        let i18n = i18n.clone();
+
+        Callback::from(move |_| {
+            if let AdminAction::DeleteLocalProduct(ref product) = *action {
+                let admin_id = admin_id.clone();
+                let barcode = product.barcode.clone();
+                let action = action.clone();
+                let fetch_data = fetch_data.clone();
+                let message = message.clone();
+                let error = error.clone();
+                let i18n = i18n.clone();
+
+                wasm_bindgen_futures::spawn_local(async move {
+                    match delete_custom_product(&admin_id, &barcode).await {
+                        Ok(_) => {
+                            message.set(Some(i18n.t("admin.processed_success")));
+                            action.set(AdminAction::None);
+                            fetch_data.emit(());
+                        }
+                        Err(e) => error.set(Some(e)),
+                    }
+                });
+            }
+        })
+    };
+
     let on_submit_reset = {
         let admin_id = current_user.id.clone();
         let action = action.clone();
@@ -294,12 +387,12 @@ pub fn admin() -> Html {
             </div>
 
             // Tab Switcher
-            <div class="flex border-b border-gray-200 mb-6">
+            <div class="flex border-b border-gray-200 mb-6 overflow-x-auto">
                 if is_admin {
                     <button 
                         onclick={let active_tab = active_tab.clone(); move |_| active_tab.set(AdminTab::Users)}
                         class={classes!(
-                            "px-6", "py-2", "font-medium", "transition-colors", "border-b-2",
+                            "px-6", "py-2", "font-medium", "transition-colors", "border-b-2", "whitespace-nowrap",
                             if *active_tab == AdminTab::Users { "border-blue-600 text-blue-600" } else { "border-transparent text-gray-500 hover:text-gray-700" }
                         )}
                     >
@@ -309,11 +402,20 @@ pub fn admin() -> Html {
                 <button 
                     onclick={let active_tab = active_tab.clone(); move |_| active_tab.set(AdminTab::PendingProducts)}
                     class={classes!(
-                        "px-6", "py-2", "font-medium", "transition-colors", "border-b-2",
+                        "px-6", "py-2", "font-medium", "transition-colors", "border-b-2", "whitespace-nowrap",
                         if *active_tab == AdminTab::PendingProducts { "border-blue-600 text-blue-600" } else { "border-transparent text-gray-500 hover:text-gray-700" }
                     )}
                 >
                     {i18n.t("admin.pending_products")}
+                </button>
+                <button 
+                    onclick={let active_tab = active_tab.clone(); move |_| active_tab.set(AdminTab::LocalProducts)}
+                    class={classes!(
+                        "px-6", "py-2", "font-medium", "transition-colors", "border-b-2", "whitespace-nowrap",
+                        if *active_tab == AdminTab::LocalProducts { "border-blue-600 text-blue-600" } else { "border-transparent text-gray-500 hover:text-gray-700" }
+                    )}
+                >
+                    {i18n.t("admin.local_db")}
                 </button>
             </div>
 
@@ -399,8 +501,8 @@ pub fn admin() -> Html {
                                                          else if user.role == "moderator" { i18n.t("admin.moderator_role") }
                                                          else { i18n.t("admin.user_role") }}
                                                     </button>
-                                                    </td>
-                                                    <td class="p-4 text-right space-x-2">
+                                                </td>
+                                                <td class="p-4 text-right space-x-2">
                                                     if !is_current {
                                                         <button 
                                                             onclick={let on_update_role = on_update_role.clone(); let user_id = user.id.clone(); let next_role = if user.role == "moderator" { "user" } else { "moderator" }; move |_| on_update_role.emit((user_id.clone(), next_role.to_string()))}
@@ -409,7 +511,6 @@ pub fn admin() -> Html {
                                                             {if user.role == "moderator" { i18n.t("admin.set_as_user") } else { i18n.t("admin.set_as_moderator") }}
                                                         </button>
                                                         <button onclick={on_edit} class="text-xs font-medium px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition">
-
                                                             {i18n.t("admin.edit_user")}
                                                         </button>
                                                         <button onclick={on_reset} class="text-xs font-medium px-2 py-1 bg-yellow-50 text-yellow-700 rounded border border-yellow-100 hover:bg-yellow-100 transition">
@@ -427,7 +528,7 @@ pub fn admin() -> Html {
                             </table>
                         </div>
                     }
-                } else {
+                } else if *active_tab == AdminTab::PendingProducts {
                     if *loading && pending_products.is_empty() {
                         <div class="p-8 text-center text-gray-500">{i18n.t("common.loading")}</div>
                     } else if pending_products.is_empty() {
@@ -435,7 +536,7 @@ pub fn admin() -> Html {
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-4 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                             </svg>
-                            <p>{"No pending products to review"}</p>
+                            <p>{i18n.t("admin.pending_products")} {" is empty"}</p>
                         </div>
                     } else {
                         <div class="overflow-x-auto">
@@ -473,6 +574,71 @@ pub fn admin() -> Html {
                                                 <td class="p-4 text-right">
                                                     <button onclick={on_process_click} class="text-xs font-medium px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
                                                         {i18n.t("admin.process_product")}
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                } else if *active_tab == AdminTab::LocalProducts {
+                    if *loading && local_products.is_empty() {
+                        <div class="p-8 text-center text-gray-500">{i18n.t("common.loading")}</div>
+                    } else if local_products.is_empty() {
+                        <div class="p-12 text-center text-gray-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-4 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                            </svg>
+                            <p>{i18n.t("admin.verified_products")} {" is empty"}</p>
+                        </div>
+                    } else {
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="text-xs uppercase text-gray-400 bg-gray-50">
+                                        <th class="p-4 font-medium">{"Barcode"}</th>
+                                        <th class="p-4 font-medium">{"Name"}</th>
+                                        <th class="p-4 font-medium">{"Brand"}</th>
+                                        <th class="p-4 font-medium">{"Unit"}</th>
+                                        <th class="p-4 font-medium text-right">{i18n.t("admin.actions")}</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    {for local_products.iter().map(|product| {
+                                        let product_clone = product.clone();
+                                        let on_edit_local = {
+                                            let action = action.clone();
+                                            let process_name = process_name.clone();
+                                            let process_brand = process_brand.clone();
+                                            let process_unit = process_unit.clone();
+                                            let p = product_clone.clone();
+                                            Callback::from(move |_| {
+                                                process_name.set(p.name.clone());
+                                                process_brand.set(p.brand.clone().unwrap_or_default());
+                                                process_unit.set(p.unit.clone().unwrap_or_else(|| "pcs".to_string()));
+                                                action.set(AdminAction::EditLocalProduct(p.clone()));
+                                            })
+                                        };
+                                        let on_delete_local = {
+                                            let action = action.clone();
+                                            let p = product_clone.clone();
+                                            Callback::from(move |_| action.set(AdminAction::DeleteLocalProduct(p.clone())))
+                                        };
+
+                                        html! {
+                                            <tr class="hover:bg-gray-50 transition-colors">
+                                                <td class="p-4 font-mono text-xs">{&product.barcode}</td>
+                                                <td class="p-4 text-gray-900 font-medium">{&product.name}</td>
+                                                <td class="p-4 text-gray-600 text-sm">{product.brand.as_ref().unwrap_or(&String::new())}</td>
+                                                <td class="p-4 text-gray-500 text-xs">{product.unit.as_ref().unwrap_or(&String::new())}</td>
+                                                <td class="p-4 text-right space-x-2">
+                                                    <button onclick={on_edit_local} class="text-xs font-medium px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition">
+                                                        {i18n.t("admin.edit_product")}
+                                                    </button>
+                                                    <button onclick={on_delete_local} class="text-xs font-medium px-2 py-1 bg-red-50 text-red-700 rounded border border-red-100 hover:bg-red-100 transition">
+                                                        {i18n.t("common.delete")}
                                                     </button>
                                                 </td>
                                             </tr>
@@ -590,6 +756,135 @@ pub fn admin() -> Html {
                                     {i18n.t("admin.action_discard")}
                                 </button>
                                 <button type="button" onclick={let action = action.clone(); move |_| action.set(AdminAction::None)} class="py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition">
+                                    {i18n.t("common.cancel")}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                },
+                AdminAction::EditLocalProduct(product) => html! {
+                    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                        <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
+                            <h3 class="text-xl font-bold mb-2">{i18n.t("admin.edit_product")}</h3>
+                            <p class="text-sm text-gray-500 font-mono mb-6">{&product.barcode}</p>
+                            
+                            <form onsubmit={on_submit_edit_local.clone()} class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("barcode.product_name")}</label>
+                                    <input 
+                                        type="text" 
+                                        class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                                        value={(*process_name).clone()}
+                                        oninput={let process_name = process_name.clone(); Callback::from(move |e: InputEvent| {
+                                            let input: HtmlInputElement = e.target_unchecked_into();
+                                            process_name.set(input.value());
+                                        })}
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("barcode.product_brand")}</label>
+                                    <input 
+                                        type="text" 
+                                        class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                                        value={(*process_brand).clone()}
+                                        oninput={let process_brand = process_brand.clone(); Callback::from(move |e: InputEvent| {
+                                            let input: HtmlInputElement = e.target_unchecked_into();
+                                            process_brand.set(input.value());
+                                        })}
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("common.unit")}</label>
+                                    <select 
+                                        class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                                        value={(*process_unit).clone()}
+                                        onchange={let process_unit = process_unit.clone(); Callback::from(move |e: Event| {
+                                            let input: web_sys::HtmlSelectElement = e.target_unchecked_into();
+                                            process_unit.set(input.value());
+                                        })}
+                                    >
+                                        <option value="pcs">{"pcs"}</option>
+                                        <option value="kg">{"kg"}</option>
+                                        <option value="g">{"g"}</option>
+                                        <option value="l">{"l"}</option>
+                                        <option value="ml">{"ml"}</option>
+                                    </select>
+                                </div>
+                                <div class="flex flex-col gap-2 pt-2">
+                                    <div class="flex gap-2">
+                                        <button type="submit" class="flex-1 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition">
+                                            {i18n.t("common.save")}
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onclick={
+                                                let admin_id = current_user.id.clone();
+                                                let action_state = action.clone();
+                                                let name = (*process_name).clone();
+                                                let brand = (*process_brand).clone();
+                                                let unit = (*process_unit).clone();
+                                                let fetch_data = fetch_data.clone();
+                                                let message = message.clone();
+                                                let error = error.clone();
+                                                let i18n = i18n.clone();
+                                                
+                                                Callback::from(move |_| {
+                                                    if let AdminAction::EditLocalProduct(ref product) = *action_state {
+                                                        let admin_id = admin_id.clone();
+                                                        let barcode = product.barcode.clone();
+                                                        let req = UpdateCustomProductRequest {
+                                                            name: name.clone(),
+                                                            brand: if brand.is_empty() { None } else { Some(brand.clone()) },
+                                                            unit: if unit.is_empty() { None } else { Some(unit.clone()) },
+                                                            action: Some("off".to_string()),
+                                                        };
+                                                        let action_state = action_state.clone();
+                                                        let fetch_data = fetch_data.clone();
+                                                        let message = message.clone();
+                                                        let error = error.clone();
+                                                        let i18n = i18n.clone();
+                                                        
+                                                        wasm_bindgen_futures::spawn_local(async move {
+                                                            match update_custom_product(&admin_id, &barcode, req).await {
+                                                                Ok(_) => {
+                                                                    message.set(Some(i18n.t("admin.processed_success")));
+                                                                    action_state.set(AdminAction::None);
+                                                                    fetch_data.emit(());
+                                                                }
+                                                                Err(e) => error.set(Some(e)),
+                                                            }
+                                                        });
+                                                    }
+                                                })
+                                            }
+                                            class="flex-1 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition"
+                                        >
+                                            {i18n.t("admin.action_contribute")}
+                                        </button>
+                                    </div>
+                                    <button type="button" onclick={let action = action.clone(); move |_| action.set(AdminAction::None)} class="w-full py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition">
+                                        {i18n.t("common.cancel")}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                },
+                AdminAction::DeleteLocalProduct(product) => html! {
+                    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                        <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6 text-center">
+                            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                                <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </div>
+                            <h3 class="text-xl font-bold mb-2">{i18n.t("common.delete")}</h3>
+                            <p class="text-sm text-gray-500 mb-6">{"Are you sure you want to delete "}<strong>{&product.name}</strong>{" from local database?"}</p>
+                            <div class="flex gap-2">
+                                <button onclick={on_confirm_delete_local} class="flex-1 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition">
+                                    {i18n.t("common.delete")}
+                                </button>
+                                <button onclick={let action = action.clone(); move |_| action.set(AdminAction::None)} class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition">
                                     {i18n.t("common.cancel")}
                                 </button>
                             </div>

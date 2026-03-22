@@ -184,6 +184,9 @@
         "action_keep_local": "Keep Local",
         "action_contribute": "Contribute to OFF",
         "action_discard": "Discard",
-        "processed_success": "Product processed successfully"
+        "processed_success": "Product processed successfully",
+        "local_db": "Local Database",
+        "verified_products": "Verified Products",
+        "edit_product": "Edit Product"
     }
 }

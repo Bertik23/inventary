@@ -184,6 +184,9 @@
         "action_keep_local": "Ponechat lokálně",
         "action_contribute": "Přispět do OFF",
         "action_discard": "Zahodit",
-        "processed_success": "Produkt byl úspěšně zpracován"
+        "processed_success": "Produkt byl úspěšně zpracován",
+        "local_db": "Lokální databáze",
+        "verified_products": "Ověřené produkty",
+        "edit_product": "Upravit produkt"
     }
 }
