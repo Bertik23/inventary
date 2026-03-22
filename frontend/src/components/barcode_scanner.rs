@@ -12,13 +12,7 @@ pub struct Props {
     pub mode: String, // "add" or "remove"
 }
 
-fn format_quantity(q: f64) -> String {
-    if q == q.round() {
-        format!("{:.0}", q)
-    } else {
-        format!("{:.1}", q)
-    }
-}
+use crate::format_quantity;
 
 #[function_component(BarcodeScanner)]
 pub fn barcode_scanner(props: &Props) -> Html {

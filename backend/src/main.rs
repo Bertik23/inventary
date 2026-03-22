@@ -7,6 +7,8 @@ mod models;
 mod schema;
 mod handlers;
 mod openfoodfacts;
+#[cfg(test)]
+mod tests;
 // mod handlers_postgres; // Uncomment when Postgres handlers are implemented
 
 pub type DbPool = r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>;

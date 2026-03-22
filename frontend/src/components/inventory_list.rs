@@ -5,12 +5,7 @@ use crate::api::{fetch_inventory, InventoryItem};
 use crate::app::InventoryContext;
 use crate::i18n::use_i18n;
 
-fn format_quantity(q: f64) -> String {
-    let s = format!("{:.2}", q);
-    let s = s.strip_suffix(".00").unwrap_or(&s);
-    let s = s.strip_suffix("0").filter(|v| v.contains('.')).unwrap_or(s);
-    s.to_string()
-}
+use crate::format_quantity;
 
 #[derive(Properties, PartialEq)]
 pub struct Props {}

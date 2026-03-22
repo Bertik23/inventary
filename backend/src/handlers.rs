@@ -12,6 +12,10 @@ use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
 use std::env;
 
+fn is_at_least_moderator(user: &User) -> bool {
+    user.role == "admin" || user.role == "moderator"
+}
+
 fn send_reset_email(to_email: &str, token: &str) -> Result<(), String> {
     let smtp_server = env::var("SMTP_SERVER").unwrap_or_else(|_| "localhost".to_string());
     let smtp_user = env::var("SMTP_USER").unwrap_or_else(|_| "".to_string());
@@ -976,7 +980,7 @@ pub async fn list_pending_products(
         .first::<User>(&mut conn)
         .map_err(|_| actix_web::error::ErrorUnauthorized("Unauthorized"))?;
         
-    if requester.role != "admin" && requester.role != "moderator" {
+    if !is_at_least_moderator(&requester) {
         return Err(actix_web::error::ErrorForbidden("Moderator access required"));
     }
     
@@ -1120,7 +1124,7 @@ pub async fn update_custom_product(
             .first::<User>(&mut conn)
             .map_err(|_| actix_web::error::ErrorUnauthorized("Unauthorized"))?;
             
-        if requester.role != "admin" && requester.role != "moderator" {
+        if !is_at_least_moderator(&requester) {
             return Err(actix_web::error::ErrorForbidden("Moderator access required"));
         }
     }
@@ -1166,7 +1170,7 @@ pub async fn delete_custom_product(
             .first::<User>(&mut conn)
             .map_err(|_| actix_web::error::ErrorUnauthorized("Unauthorized"))?;
             
-        if requester.role != "admin" && requester.role != "moderator" {
+        if !is_at_least_moderator(&requester) {
             return Err(actix_web::error::ErrorForbidden("Moderator access required"));
         }
     }
