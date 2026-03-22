@@ -1,0 +1,13 @@
+services:
+  inventory:
+    image: ghcr.io/bertik23/inventary:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    env_file: .env
+    environment:
+      - RUST_LOG=info
+      - DATABASE_URL=sqlite:///app/data/inventory.db
+      - STATIC_FILES_DIR=/app/static
+    restart: unless-stopped

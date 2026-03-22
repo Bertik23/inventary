@@ -151,29 +151,15 @@ The frontend is built with:
 
 ## Deployment
 
-### Easy Server Deployment (Docker Combined)
+For a complete, beginner-friendly guide on how to deploy this system, please see our **[Deployment Guide](DEPLOYMENT.md)**.
 
-The easiest way to deploy the entire system is using the provided Docker configuration. This builds both the frontend and backend into a single container.
+### Quick Start (Docker)
 
-1.  **Clone the repository and navigate to the directory.**
-2.  **Run the deployment script:**
-    ```bash
-    ./deploy_server.sh
-    ```
-    This script will:
-    - Create a `./data` directory for the SQLite database.
-    - Build a combined Docker image for the frontend and backend.
-    - Start the service on port 8080.
-
-3.  **Access the application:**
-    Open `http://your-server-ip:8080` in your browser.
-
-### Manual Server Deployment (Docker Compose)
-
-You can also run things separately using the standard `docker-compose.yml`:
+If you have Docker installed, you can deploy the entire system with one command:
 ```bash
-docker-compose up --build
+./deploy_server.sh
 ```
+This will build and start the application on port 8080.
 
 ## Mobile App
 
