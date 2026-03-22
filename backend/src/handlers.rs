@@ -1002,57 +1002,65 @@ pub async fn process_pending_product(
         
     let mut conn = pool.get().expect("Failed to get DB connection");
     
-    use crate::schema::users::dsl::*;
     // Check if requester is admin or moderator
-    let requester = users.find(admin_id)
-        .first::<User>(&mut conn)
-        .map_err(|_| actix_web::error::ErrorUnauthorized("Unauthorized"))?;
-        
-    if requester.role != "admin" && requester.role != "moderator" {
-        return Err(actix_web::error::ErrorForbidden("Moderator access required"));
-    }
-    
-    match req.action.as_str() {
-        "local" => {
-            let new_custom = NewCustomProduct {
-                barcode: barcode_param.clone(),
-                name: req.name.clone(),
-                brand: req.brand.clone(),
-                image_url: None,
-                unit: req.unit.clone(),
-            };
+    {
+        use crate::schema::users::dsl::*;
+        let requester = users.find(admin_id)
+            .first::<User>(&mut conn)
+            .map_err(|_| actix_web::error::ErrorUnauthorized("Unauthorized"))?;
             
-            diesel::insert_into(crate::schema::custom_products::table)
-                .values(&new_custom)
-                .execute(&mut conn)
-                .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
-                
-            use crate::schema::pending_products::dsl::*;
-            diesel::update(pending_products.find(&barcode_param))
-                .set(status.eq("processed"))
-                .execute(&mut conn)
-                .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+        if requester.role != "admin" && requester.role != "moderator" {
+            return Err(actix_web::error::ErrorForbidden("Moderator access required"));
         }
-        "off" => {
-            // Future integration: call OFF API here
-            // For now, treat same as local but maybe mark differently
-            use crate::schema::pending_products::dsl::*;
-            diesel::update(pending_products.find(&barcode_param))
-                .set(status.eq("contributed"))
-                .execute(&mut conn)
-                .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
-        }
-        "discard" => {
-            use crate::schema::pending_products::dsl::*;
-            diesel::update(pending_products.find(&barcode_param))
-                .set(status.eq("discarded"))
-                .execute(&mut conn)
-                .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
-        }
-        _ => return Ok(HttpResponse::BadRequest().json(serde_json::json!({"error": "Invalid action"}))),
     }
     
-    Ok(HttpResponse::Ok().finish())
+    let result: Result<(), diesel::result::Error> = conn.transaction(|conn| {
+        match req.action.as_str() {
+            "local" => {
+                let new_custom = NewCustomProduct {
+                    barcode: barcode_param.clone(),
+                    name: req.name.clone(),
+                    brand: req.brand.clone(),
+                    image_url: None,
+                    unit: req.unit.clone(),
+                };
+                
+                diesel::replace_into(crate::schema::custom_products::table)
+                    .values(&new_custom)
+                    .execute(conn)?;
+                    
+                use crate::schema::pending_products::dsl::*;
+                diesel::update(pending_products.find(&barcode_param))
+                    .set(status.eq("processed"))
+                    .execute(conn)?;
+            }
+            "off" => {
+                use crate::schema::pending_products::dsl::*;
+                diesel::update(pending_products.find(&barcode_param))
+                    .set(status.eq("contributed"))
+                    .execute(conn)?;
+            }
+            "discard" => {
+                use crate::schema::pending_products::dsl::*;
+                diesel::update(pending_products.find(&barcode_param))
+                    .set(status.eq("discarded"))
+                    .execute(conn)?;
+            }
+            _ => return Err(diesel::result::Error::RollbackTransaction),
+        }
+        Ok(())
+    });
+
+    match result {
+        Ok(_) => Ok(HttpResponse::Ok().finish()),
+        Err(diesel::result::Error::RollbackTransaction) => {
+            Ok(HttpResponse::BadRequest().json(serde_json::json!({"error": "Invalid action"})))
+        },
+        Err(e) => {
+            eprintln!("Error processing product: {:?}", e);
+            Err(actix_web::error::ErrorInternalServerError(e.to_string()))
+        }
+    }
 }
 
 #[actix_web::delete("/api/admin/users/{user_id}")]
