@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  CARGO_TERM_COLOR: always
+  DATABASE_URL: sqlite://test.db
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y sqlite3 libsqlite3-dev
+
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+
+    - name: Check Formatting
+      run: cargo fmt --all -- --check
+
+    - name: Backend Tests
+      run: cargo test -p inventary-backend
+
+    - name: Frontend Tests
+      run: cargo test -p inventary-frontend
+
+    - name: Run E2E Smoke Test
+      run: |
+        chmod +x tests/e2e_smoke_test.sh
+        bash tests/e2e_smoke_test.sh
+      env:
+        OFF_USERNAME: ${{ secrets.OFF_USERNAME }}
+        OFF_PASSWORD: ${{ secrets.OFF_PASSWORD }}
