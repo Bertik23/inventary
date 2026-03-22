@@ -417,6 +417,34 @@ pub fn barcode_scanner(props: &Props) -> Html {
                 </div>
             </div>
 
+            if !templates.is_empty() {
+                <div class="mb-6">
+                    <h2 class="text-lg font-semibold mb-3 text-gray-700">{i18n.t("barcode.quick_add")}</h2>
+                    <div class="flex flex-wrap gap-2">
+                        {for templates.iter().map(|template| {
+                            let template_clone = template.clone();
+                            let on_select = on_product_select.clone();
+                            html! {
+                                <button 
+                                    onclick={Callback::from(move |_| on_select.emit(ProductInfo {
+                                        id: None,
+                                        barcode: None,
+                                        name: template_clone.name.clone(),
+                                        brand: None,
+                                        image_url: None,
+                                        categories: vec![],
+                                        unit: Some(template_clone.default_unit.clone()),
+                                    }))}
+                                    class="px-4 py-2 bg-blue-50 text-blue-700 rounded-full border border-blue-100 hover:bg-blue-100 transition font-medium text-sm"
+                                >
+                                    {&template.name}
+                                </button>
+                            }
+                        })}
+                    </div>
+                </div>
+            }
+
             <div class="mb-6">
                 <h2 class="text-lg font-semibold mb-3 text-gray-700">{i18n.t("barcode.search_by_name")}</h2>
                 <div class="flex gap-2 mb-4">
