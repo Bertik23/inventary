@@ -1,10 +1,10 @@
-pub mod login;
-pub mod main_menu;
+pub mod admin;
+pub mod barcode_scanner;
+pub mod custom_item_manager;
 pub mod inventory_list;
 pub mod inventory_selection;
-pub mod barcode_scanner;
-pub mod share_inventory;
-pub mod reset_password;
-pub mod custom_item_manager;
+pub mod login;
+pub mod main_menu;
 pub mod profile;
-pub mod admin;
+pub mod reset_password;
+pub mod share_inventory;

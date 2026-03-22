@@ -1,15 +1,20 @@
-use crate::api::{update_user, change_password, delete_user, UpdateUserRequest, ChangePasswordRequest};
-use crate::app::{UserContext, InventoryContext};
-use crate::router::Route;
+use crate::api::{
+    change_password, delete_user, update_user, ChangePasswordRequest,
+    UpdateUserRequest,
+};
+use crate::app::{InventoryContext, UserContext};
 use crate::i18n::use_i18n;
+use crate::router::Route;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yew_router::prelude::*;
 
 #[function_component(Profile)]
 pub fn profile() -> Html {
-    let user_context = use_context::<UserContext>().expect("UserContext not found");
-    let inventory_context = use_context::<InventoryContext>().expect("InventoryContext not found");
+    let user_context =
+        use_context::<UserContext>().expect("UserContext not found");
+    let inventory_context =
+        use_context::<InventoryContext>().expect("InventoryContext not found");
     let navigator = use_navigator().unwrap();
     let i18n = use_i18n();
 
@@ -26,7 +31,7 @@ pub fn profile() -> Html {
     let current_password = use_state(|| String::new());
     let new_password = use_state(|| String::new());
     let confirm_password = use_state(|| String::new());
-    
+
     let loading = use_state(|| false);
     let error = use_state(|| Option::<String>::None);
     let message = use_state(|| Option::<String>::None);
@@ -54,7 +59,7 @@ pub fn profile() -> Html {
             let user_id = user_id.clone();
             let new_username = (*username).clone();
             let new_email = (*email).clone();
-            
+
             let loading = loading.clone();
             let error = error.clone();
             let message = message.clone();
@@ -225,7 +230,7 @@ pub fn profile() -> Html {
                             disabled={*loading}
                         />
                     </div>
-                    <button 
+                    <button
                         type="submit"
                         class="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm disabled:opacity-50"
                         disabled={*loading}
@@ -287,7 +292,7 @@ pub fn profile() -> Html {
                             disabled={*loading}
                         />
                     </div>
-                    <button 
+                    <button
                         type="submit"
                         class="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium shadow-sm disabled:opacity-50"
                         disabled={*loading}
@@ -301,9 +306,9 @@ pub fn profile() -> Html {
             <div class="bg-red-50 p-6 rounded-xl shadow-sm border border-red-100 mb-6">
                 <h2 class="text-lg font-semibold mb-2 text-red-800">{i18n.t("account.danger_section")}</h2>
                 <p class="text-sm text-red-600 mb-4">{i18n.t("account.delete_confirm_desc")}</p>
-                
+
                 if !*show_delete_confirm {
-                    <button 
+                    <button
                         onclick={let show_delete_confirm = show_delete_confirm.clone(); move |_| show_delete_confirm.set(true)}
                         class="w-full py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium shadow-sm"
                     >
@@ -313,14 +318,14 @@ pub fn profile() -> Html {
                     <div class="space-y-3">
                         <p class="font-bold text-red-800 text-center">{i18n.t("account.delete_confirm_title")}</p>
                         <div class="flex gap-2">
-                            <button 
+                            <button
                                 onclick={on_delete_account}
                                 class="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium shadow-sm"
                                 disabled={*loading}
                             >
                                 {i18n.t("account.delete_button")}
                             </button>
-                            <button 
+                            <button
                                 onclick={let show_delete_confirm = show_delete_confirm.clone(); move |_| show_delete_confirm.set(false)}
                                 class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium"
                                 disabled={*loading}

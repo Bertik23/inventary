@@ -1,7 +1,7 @@
-use yew::prelude::*;
+use gloo_storage::{LocalStorage, Storage};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use gloo_storage::{Storage, LocalStorage};
+use yew::prelude::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Language {
@@ -33,7 +33,10 @@ pub struct I18nContext {
 
 impl I18nContext {
     pub fn t(&self, key: &str) -> String {
-        self.translations.get(key).cloned().unwrap_or_else(|| key.to_string())
+        self.translations
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| key.to_string())
     }
 
     pub fn t_with(&self, key: &str, params: Vec<(&str, &str)>) -> String {
@@ -53,19 +56,22 @@ fn load_translations(lang: Language) -> HashMap<String, String> {
 
     let v: serde_json::Value = serde_json::from_str(json_str).unwrap();
     let mut map = HashMap::new();
-    
+
     if let Some(obj) = v.as_object() {
         for (section_name, section_val) in obj {
             if let Some(section_obj) = section_val.as_object() {
                 for (key, val) in section_obj {
                     if let Some(s) = val.as_str() {
-                        map.insert(format!("{}.{}", section_name, key), s.to_string());
+                        map.insert(
+                            format!("{}.{}", section_name, key),
+                            s.to_string(),
+                        );
                     }
                 }
             }
         }
     }
-    
+
     map
 }
 
@@ -80,7 +86,7 @@ pub fn i18n_provider(props: &I18nProviderProps) -> Html {
     let initial_lang = LocalStorage::get::<String>("lang")
         .map(|s| Language::from_str(&s))
         .unwrap_or(Language::En);
-        
+
     let language = use_state(|| initial_lang);
     let translations = use_memo(*language, |lang| load_translations(*lang));
 

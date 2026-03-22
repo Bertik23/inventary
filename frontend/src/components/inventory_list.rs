@@ -1,9 +1,9 @@
-use yew::prelude::*;
-use yew_router::prelude::*;
-use crate::router::Route;
 use crate::api::{fetch_inventory, InventoryItem};
 use crate::app::InventoryContext;
 use crate::i18n::use_i18n;
+use crate::router::Route;
+use yew::prelude::*;
+use yew_router::prelude::*;
 
 use crate::format_quantity;
 
@@ -16,25 +16,26 @@ pub fn inventory_list(_props: &Props) -> Html {
     let loading = use_state(|| true);
     let error = use_state(|| Option::<String>::None);
     let i18n = use_i18n();
-    
-    let inventory_context = use_context::<InventoryContext>().expect("InventoryContext not found");
+
+    let inventory_context =
+        use_context::<InventoryContext>().expect("InventoryContext not found");
     let inventory_id = match &*inventory_context.inventory_id {
         Some(id) => id.clone(),
         None => {
             return html! { <div>{i18n.t("inventory.no_inventory_selected")}</div> };
         }
     };
-    
+
     {
         let items = items.clone();
         let loading = loading.clone();
         let error = error.clone();
-        
+
         use_effect_with((), move |_| {
             let items = items.clone();
             let loading = loading.clone();
             let error = error.clone();
-            
+
             wasm_bindgen_futures::spawn_local(async move {
                 match fetch_inventory(&inventory_id).await {
                     Ok(inventory) => {
@@ -49,7 +50,7 @@ pub fn inventory_list(_props: &Props) -> Html {
             });
         });
     }
-    
+
     let navigator = use_navigator().unwrap();
     let on_back = {
         let navigator = navigator.clone();
@@ -57,14 +58,14 @@ pub fn inventory_list(_props: &Props) -> Html {
             navigator.push(&Route::MainMenu);
         })
     };
-    
+
     html! {
         <div class="max-w-lg mx-auto p-4 min-h-screen bg-gray-50">
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-2xl font-bold text-gray-800">{i18n.t("inventory.title")}</h1>
                 <button class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium" onclick={on_back}>{i18n.t("common.back")}</button>
             </div>
-            
+
             if *loading {
                 <div class="flex justify-center p-8">
                     <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>

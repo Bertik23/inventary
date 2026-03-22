@@ -1,9 +1,9 @@
-pub mod app;
-pub mod components;
 pub mod api;
+pub mod app;
 pub mod barcode;
-pub mod router;
+pub mod components;
 pub mod i18n;
+pub mod router;
 
 use wasm_bindgen::prelude::*;
 
@@ -18,7 +18,7 @@ pub fn format_quantity(q: f64) -> String {
 pub fn main() {
     wasm_logger::init(wasm_logger::Config::default());
     console_error_panic_hook::set_once();
-    
+
     yew::Renderer::<app::App>::new().render();
 }
 

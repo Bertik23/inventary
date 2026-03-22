@@ -1,8 +1,12 @@
+use crate::api::{
+    create_custom_item_template, delete_custom_item_template,
+    get_custom_item_templates, update_custom_item_template,
+    CreateTemplateRequest, CustomItemTemplate, UpdateTemplateRequest,
+};
+use crate::i18n::use_i18n;
+use crate::router::Route;
 use yew::prelude::*;
 use yew_router::prelude::*;
-use crate::router::Route;
-use crate::api::{get_custom_item_templates, create_custom_item_template, update_custom_item_template, delete_custom_item_template, CustomItemTemplate, CreateTemplateRequest, UpdateTemplateRequest};
-use crate::i18n::use_i18n;
 
 #[derive(Properties, PartialEq)]
 pub struct Props {
@@ -15,24 +19,24 @@ pub fn custom_item_manager(props: &Props) -> Html {
     let loading = use_state(|| true);
     let error = use_state(|| Option::<String>::None);
     let i18n = use_i18n();
-    
+
     let new_name = use_state(|| String::new());
     let new_unit = use_state(|| "pcs".to_string());
-    
+
     let navigator = use_navigator().unwrap();
-    
+
     let fetch_templates = {
         let templates = templates.clone();
         let loading = loading.clone();
         let error = error.clone();
         let inventory_id = props.inventory_id.clone();
-        
+
         Callback::from(move |_| {
             let templates = templates.clone();
             let loading = loading.clone();
             let error = error.clone();
             let inventory_id = inventory_id.clone();
-            
+
             wasm_bindgen_futures::spawn_local(async move {
                 match get_custom_item_templates(Some(&inventory_id)).await {
                     Ok(items) => {
@@ -47,35 +51,37 @@ pub fn custom_item_manager(props: &Props) -> Html {
             });
         })
     };
-    
+
     {
         let fetch_templates = fetch_templates.clone();
         use_effect_with((), move |_| {
             fetch_templates.emit(());
         });
     }
-    
+
     let on_back = {
         let navigator = navigator.clone();
         Callback::from(move |_| {
             navigator.push(&Route::MainMenu);
         })
     };
-    
+
     let on_add = {
         let fetch_templates = fetch_templates.clone();
         let new_name = new_name.clone();
         let new_unit = new_unit.clone();
         let inventory_id = props.inventory_id.clone();
-        
+
         Callback::from(move |_| {
             let fetch_templates = fetch_templates.clone();
             let name = (*new_name).clone();
             let unit = (*new_unit).clone();
             let inventory_id = inventory_id.clone();
-            
-            if name.is_empty() { return; }
-            
+
+            if name.is_empty() {
+                return;
+            }
+
             let new_name_state = new_name.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let req = CreateTemplateRequest {
@@ -83,7 +89,7 @@ pub fn custom_item_manager(props: &Props) -> Html {
                     name: name,
                     default_unit: unit,
                 };
-                
+
                 match create_custom_item_template(req).await {
                     Ok(_) => {
                         fetch_templates.emit(());
@@ -94,20 +100,25 @@ pub fn custom_item_manager(props: &Props) -> Html {
             });
         })
     };
-    
+
     let on_unit_change = {
         let fetch_templates = fetch_templates.clone();
         Callback::from(move |(id, unit): (String, String)| {
             let fetch_templates = fetch_templates.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                match update_custom_item_template(&id, UpdateTemplateRequest { default_unit: unit }).await {
+                match update_custom_item_template(
+                    &id,
+                    UpdateTemplateRequest { default_unit: unit },
+                )
+                .await
+                {
                     Ok(_) => fetch_templates.emit(()),
                     Err(e) => log::error!("Failed to update template: {}", e),
                 }
             });
         })
     };
-    
+
     let on_override = {
         let fetch_templates = fetch_templates.clone();
         let inventory_id = props.inventory_id.clone();
@@ -127,7 +138,7 @@ pub fn custom_item_manager(props: &Props) -> Html {
             });
         })
     };
-    
+
     let on_delete = {
         let fetch_templates = fetch_templates.clone();
         Callback::from(move |id: String| {
@@ -140,14 +151,14 @@ pub fn custom_item_manager(props: &Props) -> Html {
             });
         })
     };
-    
+
     html! {
         <div class="max-w-lg mx-auto p-4 min-h-screen bg-gray-50">
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-2xl font-bold text-gray-800">{i18n.t("custom_items.title")}</h1>
                 <button class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium" onclick={on_back}>{i18n.t("common.back")}</button>
             </div>
-            
+
             <div class="mb-8 bg-white p-5 rounded-xl shadow-sm border border-gray-100">
                 <h2 class="text-lg font-semibold mb-4 text-gray-700">{i18n.t("custom_items.add_new")}</h2>
                 <div class="space-y-4">
@@ -168,7 +179,7 @@ pub fn custom_item_manager(props: &Props) -> Html {
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("custom_items.default_unit")}</label>
-                        <select 
+                        <select
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
                             value={(*new_unit).clone()}
                             onchange={Callback::from({
@@ -186,7 +197,7 @@ pub fn custom_item_manager(props: &Props) -> Html {
                             <option value="ml">{format!("ml ({})", i18n.t("custom_items.unit_ml"))}</option>
                         </select>
                     </div>
-                    <button 
+                    <button
                         class="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm"
                         onclick={on_add}
                         disabled={new_name.is_empty()}
@@ -195,7 +206,7 @@ pub fn custom_item_manager(props: &Props) -> Html {
                     </button>
                 </div>
             </div>
-            
+
             <h2 class="text-lg font-semibold mb-3 text-gray-700">{i18n.t("custom_items.manage_title")}</h2>
             <p class="text-sm text-gray-500 mb-4">{i18n.t("custom_items.manage_desc")}</p>
             if *loading {
@@ -209,7 +220,7 @@ pub fn custom_item_manager(props: &Props) -> Html {
                         let is_global = template.inventory_id.is_none();
                         let current_unit = template.default_unit.clone();
                         let i18n = i18n.clone();
-                        
+
                         html! {
                             <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-3">
                                 <div class="flex justify-between items-center">
@@ -223,14 +234,14 @@ pub fn custom_item_manager(props: &Props) -> Html {
                                     </div>
                                     <div class="flex items-center gap-2">
                                         if is_global {
-                                            <button 
+                                            <button
                                                 class="px-3 py-1 text-xs bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition font-medium"
                                                 onclick={let on_override = on_override.clone(); let t = template.clone(); move |_| on_override.emit(t.clone())}
                                             >
                                                 {i18n.t("custom_items.override")}
                                             </button>
                                         } else {
-                                            <button 
+                                            <button
                                                 class="p-2 text-red-400 hover:text-red-600 transition"
                                                 onclick={let on_delete = on_delete.clone(); let id = id.clone(); move |_| on_delete.emit(id.clone())}
                                             >
@@ -246,7 +257,7 @@ pub fn custom_item_manager(props: &Props) -> Html {
                                     if is_global {
                                         <span class="text-sm font-medium text-gray-700">{&current_unit}</span>
                                     } else {
-                                        <select 
+                                        <select
                                             class="text-sm border border-gray-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
                                             value={current_unit.clone()}
                                             onchange={let on_unit_change = on_unit_change.clone(); let id = id.clone(); move |e: Event| {

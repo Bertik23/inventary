@@ -1,13 +1,14 @@
 use crate::api::{
-    list_users, update_user_role, admin_update_user, admin_reset_password, admin_delete_user,
-    list_pending_products, process_pending_product,
-    list_custom_products, update_custom_product, delete_custom_product,
-    User, AdminUpdateUserRequest, AdminResetPasswordRequest, PendingProduct, ProcessProductRequest,
-    CustomProduct, UpdateCustomProductRequest
+    admin_delete_user, admin_reset_password, admin_update_user,
+    delete_custom_product, list_custom_products, list_pending_products,
+    list_users, process_pending_product, update_custom_product,
+    update_user_role, AdminResetPasswordRequest, AdminUpdateUserRequest,
+    CustomProduct, PendingProduct, ProcessProductRequest,
+    UpdateCustomProductRequest, User,
 };
 use crate::app::UserContext;
-use crate::router::Route;
 use crate::i18n::use_i18n;
+use crate::router::Route;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yew_router::prelude::*;
@@ -32,7 +33,8 @@ enum AdminTab {
 
 #[function_component(Admin)]
 pub fn admin() -> Html {
-    let user_context = use_context::<UserContext>().expect("UserContext not found");
+    let user_context =
+        use_context::<UserContext>().expect("UserContext not found");
     let navigator = use_navigator().unwrap();
     let i18n = use_i18n();
 
@@ -45,12 +47,18 @@ pub fn admin() -> Html {
     };
 
     let is_admin = current_user.role == "admin";
-    let active_tab = use_state(|| if is_admin { AdminTab::Users } else { AdminTab::PendingProducts });
-    
+    let active_tab = use_state(|| {
+        if is_admin {
+            AdminTab::Users
+        } else {
+            AdminTab::PendingProducts
+        }
+    });
+
     let users = use_state(|| Vec::<User>::new());
     let pending_products = use_state(|| Vec::<PendingProduct>::new());
     let local_products = use_state(|| Vec::<CustomProduct>::new());
-    
+
     let loading = use_state(|| true);
     let error = use_state(|| Option::<String>::None);
     let message = use_state(|| Option::<String>::None);
@@ -85,18 +93,16 @@ pub fn admin() -> Html {
             loading.set(true);
             wasm_bindgen_futures::spawn_local(async move {
                 match active_tab_val {
-                    AdminTab::Users => {
-                        match list_users(&admin_id).await {
-                            Ok(u) => users.set(u),
-                            Err(e) => error.set(Some(e)),
-                        }
+                    AdminTab::Users => match list_users(&admin_id).await {
+                        Ok(u) => users.set(u),
+                        Err(e) => error.set(Some(e)),
                     },
                     AdminTab::PendingProducts => {
                         match list_pending_products(&admin_id).await {
                             Ok(p) => pending_products.set(p),
                             Err(e) => error.set(Some(e)),
                         }
-                    },
+                    }
                     AdminTab::LocalProducts => {
                         match list_custom_products(&admin_id).await {
                             Ok(p) => local_products.set(p),
@@ -213,12 +219,19 @@ pub fn admin() -> Html {
                     let req = ProcessProductRequest {
                         action: act_type,
                         name,
-                        brand: if brand.is_empty() { None } else { Some(brand) },
+                        brand: if brand.is_empty() {
+                            None
+                        } else {
+                            Some(brand)
+                        },
                         unit: if unit.is_empty() { None } else { Some(unit) },
                     };
-                    match process_pending_product(&admin_id, &barcode, req).await {
+                    match process_pending_product(&admin_id, &barcode, req)
+                        .await
+                    {
                         Ok(_) => {
-                            message.set(Some(i18n.t("admin.processed_success")));
+                            message
+                                .set(Some(i18n.t("admin.processed_success")));
                             action.set(AdminAction::None);
                             fetch_data.emit(());
                         }
@@ -257,13 +270,19 @@ pub fn admin() -> Html {
                 wasm_bindgen_futures::spawn_local(async move {
                     let req = UpdateCustomProductRequest {
                         name,
-                        brand: if brand.is_empty() { None } else { Some(brand) },
+                        brand: if brand.is_empty() {
+                            None
+                        } else {
+                            Some(brand)
+                        },
                         unit: if unit.is_empty() { None } else { Some(unit) },
                         action: None,
                     };
-                    match update_custom_product(&admin_id, &barcode, req).await {
+                    match update_custom_product(&admin_id, &barcode, req).await
+                    {
                         Ok(_) => {
-                            message.set(Some(i18n.t("admin.processed_success")));
+                            message
+                                .set(Some(i18n.t("admin.processed_success")));
                             action.set(AdminAction::None);
                             fetch_data.emit(());
                         }
@@ -295,7 +314,8 @@ pub fn admin() -> Html {
                 wasm_bindgen_futures::spawn_local(async move {
                     match delete_custom_product(&admin_id, &barcode).await {
                         Ok(_) => {
-                            message.set(Some(i18n.t("admin.processed_success")));
+                            message
+                                .set(Some(i18n.t("admin.processed_success")));
                             action.set(AdminAction::None);
                             fetch_data.emit(());
                         }
@@ -389,7 +409,7 @@ pub fn admin() -> Html {
             // Tab Switcher
             <div class="flex border-b border-gray-200 mb-6 overflow-x-auto">
                 if is_admin {
-                    <button 
+                    <button
                         onclick={let active_tab = active_tab.clone(); move |_| active_tab.set(AdminTab::Users)}
                         class={classes!(
                             "px-6", "py-2", "font-medium", "transition-colors", "border-b-2", "whitespace-nowrap",
@@ -399,7 +419,7 @@ pub fn admin() -> Html {
                         {i18n.t("admin.users_list")}
                     </button>
                 }
-                <button 
+                <button
                     onclick={let active_tab = active_tab.clone(); move |_| active_tab.set(AdminTab::PendingProducts)}
                     class={classes!(
                         "px-6", "py-2", "font-medium", "transition-colors", "border-b-2", "whitespace-nowrap",
@@ -408,7 +428,7 @@ pub fn admin() -> Html {
                 >
                     {i18n.t("admin.pending_products")}
                 </button>
-                <button 
+                <button
                     onclick={let active_tab = active_tab.clone(); move |_| active_tab.set(AdminTab::LocalProducts)}
                     class={classes!(
                         "px-6", "py-2", "font-medium", "transition-colors", "border-b-2", "whitespace-nowrap",
@@ -446,7 +466,7 @@ pub fn admin() -> Html {
                                     {for users.iter().map(|user| {
                                         let user_clone = user.clone();
                                         let is_current = user.id == current_user.id;
-                                        
+
                                         let on_edit = {
                                             let action = action.clone();
                                             let edit_username = edit_username.clone();
@@ -487,24 +507,24 @@ pub fn admin() -> Html {
                                                 <td class="p-4 text-gray-900 font-medium">{&user.username}</td>
                                                 <td class="p-4 text-gray-600 text-sm">{&user.email}</td>
                                                 <td class="p-4">
-                                                    <button 
+                                                    <button
                                                         onclick={on_toggle_role}
                                                         disabled={is_current}
                                                         class={classes!(
                                                             "px-2", "py-1", "rounded-full", "text-xs", "font-medium", "transition-colors",
-                                                            if user.role == "admin" { "bg-purple-100 text-purple-700 hover:bg-purple-200" } 
+                                                            if user.role == "admin" { "bg-purple-100 text-purple-700 hover:bg-purple-200" }
                                                             else if user.role == "moderator" { "bg-teal-100 text-teal-700 hover:bg-teal-200" }
                                                             else { "bg-blue-100 text-blue-700 hover:bg-blue-200" }
                                                         )}
                                                     >
-                                                        {if user.role == "admin" { i18n.t("admin.admin_role") } 
+                                                        {if user.role == "admin" { i18n.t("admin.admin_role") }
                                                          else if user.role == "moderator" { i18n.t("admin.moderator_role") }
                                                          else { i18n.t("admin.user_role") }}
                                                     </button>
                                                 </td>
                                                 <td class="p-4 text-right space-x-2">
                                                     if !is_current {
-                                                        <button 
+                                                        <button
                                                             onclick={let on_update_role = on_update_role.clone(); let user_id = user.id.clone(); let next_role = if user.role == "moderator" { "user" } else { "moderator" }; move |_| on_update_role.emit((user_id.clone(), next_role.to_string()))}
                                                             class="text-xs font-medium px-2 py-1 bg-teal-50 text-teal-700 rounded border border-teal-100 hover:bg-teal-100 transition"
                                                         >
@@ -661,8 +681,8 @@ pub fn admin() -> Html {
                             <form onsubmit={on_submit_edit} class="space-y-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("admin.new_username")}</label>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
                                         value={(*edit_username).clone()}
                                         oninput={let edit_username = edit_username.clone(); Callback::from(move |e: InputEvent| {
@@ -673,8 +693,8 @@ pub fn admin() -> Html {
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("admin.new_email")}</label>
-                                    <input 
-                                        type="email" 
+                                    <input
+                                        type="email"
                                         class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
                                         value={(*edit_email).clone()}
                                         oninput={let edit_email = edit_email.clone(); Callback::from(move |e: InputEvent| {
@@ -700,12 +720,12 @@ pub fn admin() -> Html {
                         <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
                             <h3 class="text-xl font-bold mb-2">{i18n.t("admin.process_product")}</h3>
                             <p class="text-sm text-gray-500 font-mono mb-6">{&product.barcode}</p>
-                            
+
                             <div class="space-y-4 mb-8">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("barcode.product_name")}</label>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
                                         value={(*process_name).clone()}
                                         oninput={let process_name = process_name.clone(); Callback::from(move |e: InputEvent| {
@@ -716,8 +736,8 @@ pub fn admin() -> Html {
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("barcode.product_brand")}</label>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
                                         value={(*process_brand).clone()}
                                         oninput={let process_brand = process_brand.clone(); Callback::from(move |e: InputEvent| {
@@ -728,7 +748,7 @@ pub fn admin() -> Html {
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("common.unit")}</label>
-                                    <select 
+                                    <select
                                         class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
                                         value={(*process_unit).clone()}
                                         onchange={let process_unit = process_unit.clone(); Callback::from(move |e: Event| {
@@ -767,12 +787,12 @@ pub fn admin() -> Html {
                         <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
                             <h3 class="text-xl font-bold mb-2">{i18n.t("admin.edit_product")}</h3>
                             <p class="text-sm text-gray-500 font-mono mb-6">{&product.barcode}</p>
-                            
+
                             <form onsubmit={on_submit_edit_local.clone()} class="space-y-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("barcode.product_name")}</label>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
                                         value={(*process_name).clone()}
                                         oninput={let process_name = process_name.clone(); Callback::from(move |e: InputEvent| {
@@ -783,8 +803,8 @@ pub fn admin() -> Html {
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("barcode.product_brand")}</label>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
                                         value={(*process_brand).clone()}
                                         oninput={let process_brand = process_brand.clone(); Callback::from(move |e: InputEvent| {
@@ -795,7 +815,7 @@ pub fn admin() -> Html {
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("common.unit")}</label>
-                                    <select 
+                                    <select
                                         class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
                                         value={(*process_unit).clone()}
                                         onchange={let process_unit = process_unit.clone(); Callback::from(move |e: Event| {
@@ -815,7 +835,7 @@ pub fn admin() -> Html {
                                         <button type="submit" class="flex-1 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition">
                                             {i18n.t("common.save")}
                                         </button>
-                                        <button 
+                                        <button
                                             type="button"
                                             onclick={
                                                 let admin_id = current_user.id.clone();
@@ -827,7 +847,7 @@ pub fn admin() -> Html {
                                                 let message = message.clone();
                                                 let error = error.clone();
                                                 let i18n = i18n.clone();
-                                                
+
                                                 Callback::from(move |_| {
                                                     if let AdminAction::EditLocalProduct(ref product) = *action_state {
                                                         let admin_id = admin_id.clone();
@@ -843,7 +863,7 @@ pub fn admin() -> Html {
                                                         let message = message.clone();
                                                         let error = error.clone();
                                                         let i18n = i18n.clone();
-                                                        
+
                                                         wasm_bindgen_futures::spawn_local(async move {
                                                             match update_custom_product(&admin_id, &barcode, req).await {
                                                                 Ok(_) => {
@@ -898,8 +918,8 @@ pub fn admin() -> Html {
                             <form onsubmit={on_submit_reset} class="space-y-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">{i18n.t("admin.new_password")}</label>
-                                    <input 
-                                        type="password" 
+                                    <input
+                                        type="password"
                                         class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
                                         value={(*reset_password_val).clone()}
                                         oninput={let reset_password_val = reset_password_val.clone(); Callback::from(move |e: InputEvent| {

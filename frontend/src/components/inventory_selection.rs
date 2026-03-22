@@ -2,8 +2,8 @@ use crate::api::{
     create_inventory, get_user_inventories, CreateInventoryRequest, Inventory,
 };
 use crate::app::{InventoryContext, UserContext};
-use crate::router::Route;
 use crate::i18n::use_i18n;
+use crate::router::Route;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yew_router::prelude::*;
@@ -47,7 +47,8 @@ pub fn inventory_selection(_props: &Props) -> Html {
                 match get_user_inventories(&user_id).await {
                     Ok(invs) => {
                         // Check if we already have an inventory_id set and it exists in user inventories
-                        let current_id = (*inventory_context.inventory_id).clone();
+                        let current_id =
+                            (*inventory_context.inventory_id).clone();
                         if let Some(id) = current_id {
                             if invs.iter().any(|inv| inv.id == id) {
                                 navigator.push(&Route::MainMenu);
@@ -112,7 +113,7 @@ pub fn inventory_selection(_props: &Props) -> Html {
             <div class="max-w-md mx-auto">
                 <div class="flex justify-between items-center mb-6">
                     <h1 class="text-2xl font-bold text-gray-900">{i18n.t("inventory.selection_title")}</h1>
-                    <button 
+                    <button
                         onclick={
                             let user_context = user_context.clone();
                             let inventory_context = inventory_context.clone();
@@ -218,4 +219,3 @@ pub fn inventory_selection(_props: &Props) -> Html {
         </div>
     }
 }
-

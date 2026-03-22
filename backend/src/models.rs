@@ -1,7 +1,9 @@
+use crate::schema::{
+    custom_item_templates, inventories, inventory_items, inventory_users, users,
+};
+use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
-use chrono::NaiveDateTime;
-use crate::schema::{inventory_items, users, inventories, inventory_users, custom_item_templates};
 
 #[derive(Queryable, Serialize, Deserialize, Clone)]
 pub struct InventoryItem {

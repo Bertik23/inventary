@@ -1,9 +1,9 @@
-use yew::prelude::*;
-use yew_router::prelude::*;
-use crate::router::{switch, Route};
 use crate::api::User;
 use crate::i18n::I18nProvider;
+use crate::router::{switch, Route};
 use web_sys::window;
+use yew::prelude::*;
+use yew_router::prelude::*;
 
 #[derive(Clone, PartialEq)]
 pub struct UserContext {
@@ -31,7 +31,9 @@ pub fn app() -> Html {
     {
         let user = user.clone();
         use_effect_with(user, |user| {
-            if let Some(storage) = window().and_then(|w| w.local_storage().ok().flatten()) {
+            if let Some(storage) =
+                window().and_then(|w| w.local_storage().ok().flatten())
+            {
                 if let Some(u) = &**user {
                     let json = serde_json::to_string(u).unwrap_or_default();
                     let _ = storage.set_item("user", &json);
@@ -45,7 +47,9 @@ pub fn app() -> Html {
     {
         let inventory_id = inventory_id.clone();
         use_effect_with(inventory_id, |inventory_id| {
-            if let Some(storage) = window().and_then(|w| w.local_storage().ok().flatten()) {
+            if let Some(storage) =
+                window().and_then(|w| w.local_storage().ok().flatten())
+            {
                 if let Some(id) = &**inventory_id {
                     let _ = storage.set_item("inventory_id", id);
                 } else {
@@ -70,4 +74,3 @@ pub fn app() -> Html {
         </I18nProvider>
     }
 }
-

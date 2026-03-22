@@ -1,6 +1,6 @@
-use crate::router::Route;
-use crate::app::{UserContext, InventoryContext};
+use crate::app::{InventoryContext, UserContext};
 use crate::i18n::{use_i18n, Language};
+use crate::router::Route;
 use yew::prelude::*;
 use yew_router::prelude::*;
 
@@ -10,8 +10,10 @@ pub struct Props {}
 #[function_component(MainMenu)]
 pub fn main_menu(_props: &Props) -> Html {
     let navigator = use_navigator().unwrap();
-    let user_context = use_context::<UserContext>().expect("UserContext not found");
-    let inventory_context = use_context::<InventoryContext>().expect("InventoryContext not found");
+    let user_context =
+        use_context::<UserContext>().expect("UserContext not found");
+    let inventory_context =
+        use_context::<InventoryContext>().expect("InventoryContext not found");
     let i18n = use_i18n();
 
     let set_lang = {
@@ -76,7 +78,6 @@ pub fn main_menu(_props: &Props) -> Html {
     };
 
     let on_manage_custom_items_click = {
-
         let navigator = navigator.clone();
         let inventory_id = (*inventory_context.inventory_id).clone();
         Callback::from(move |_| {
@@ -100,13 +101,13 @@ pub fn main_menu(_props: &Props) -> Html {
     html! {
         <div class="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
             <div class="w-full flex justify-end gap-2 mb-4 max-w-md">
-                <button 
+                <button
                     onclick={let set_lang = set_lang.clone(); move |_| set_lang.emit(Language::En)}
                     class={classes!("px-2", "py-1", "text-xs", "rounded", "border", "transition", if *i18n.language == Language::En { "bg-blue-600 text-white border-blue-600" } else { "bg-white text-gray-600 border-gray-200" })}
                 >
                     {"EN"}
                 </button>
-                <button 
+                <button
                     onclick={let set_lang = set_lang.clone(); move |_| set_lang.emit(Language::Cs)}
                     class={classes!("px-2", "py-1", "text-xs", "rounded", "border", "transition", if *i18n.language == Language::Cs { "bg-blue-600 text-white border-blue-600" } else { "bg-white text-gray-600 border-gray-200" })}
                 >
@@ -288,4 +289,3 @@ pub fn main_menu(_props: &Props) -> Html {
         </div>
     }
 }
-

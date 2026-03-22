@@ -1,6 +1,6 @@
 use crate::api::{reset_password, ResetPasswordRequest};
-use crate::router::Route;
 use crate::i18n::use_i18n;
+use crate::router::Route;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yew_router::prelude::*;
@@ -18,7 +18,8 @@ pub fn reset_password_comp(_props: &Props) -> Html {
     let i18n = use_i18n();
 
     let location = use_location().expect("Location not found");
-    let token = location.query::<std::collections::HashMap<String, String>>()
+    let token = location
+        .query::<std::collections::HashMap<String, String>>()
         .ok()
         .and_then(|params| params.get("token").cloned())
         .unwrap_or_default();
@@ -76,7 +77,8 @@ pub fn reset_password_comp(_props: &Props) -> Html {
                         let navigator = navigator.clone();
                         gloo_timers::callback::Timeout::new(3000, move || {
                             navigator.push(&Route::Login);
-                        }).forget();
+                        })
+                        .forget();
                     }
                     Err(e) => error.set(Some(e)),
                 }

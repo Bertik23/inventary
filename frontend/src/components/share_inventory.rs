@@ -2,8 +2,8 @@ use crate::api::{
     get_inventory_users, share_inventory, unshare_inventory,
     ShareInventoryRequest, SharedUser, UnshareInventoryRequest,
 };
-use crate::router::Route;
 use crate::i18n::use_i18n;
+use crate::router::Route;
 use log;
 use web_sys::{HtmlInputElement, HtmlOptionElement};
 use yew::prelude::*;

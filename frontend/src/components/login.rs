@@ -1,7 +1,10 @@
-use crate::api::{login_user, register_user, forgot_password, AuthRequest, ForgotPasswordRequest, get_api_base, set_api_base};
+use crate::api::{
+    forgot_password, get_api_base, login_user, register_user, set_api_base,
+    AuthRequest, ForgotPasswordRequest,
+};
 use crate::app::UserContext;
-use crate::router::Route;
 use crate::i18n::use_i18n;
+use crate::router::Route;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yew_router::prelude::*;
@@ -66,7 +69,10 @@ pub fn login(_props: &Props) -> Html {
                     return;
                 }
             } else if *is_registering {
-                if username_str.is_empty() || email_str.is_empty() || password_str.is_empty() {
+                if username_str.is_empty()
+                    || email_str.is_empty()
+                    || password_str.is_empty()
+                {
                     error.set(Some(i18n.t("common.fill_all_fields")));
                     return;
                 }
@@ -95,7 +101,11 @@ pub fn login(_props: &Props) -> Html {
 
             wasm_bindgen_futures::spawn_local(async move {
                 if is_forgot {
-                    match forgot_password(ForgotPasswordRequest { email: email_str }).await {
+                    match forgot_password(ForgotPasswordRequest {
+                        email: email_str,
+                    })
+                    .await
+                    {
                         Ok(_) => {
                             message.set(Some(i18n.t("login.reset_link_sent")));
                         }
@@ -139,7 +149,7 @@ pub fn login(_props: &Props) -> Html {
                             {if *is_forgot_password { i18n.t("login.reset_password_desc") } else if *is_registering { i18n.t("login.sign_up_desc") } else { i18n.t("login.sign_in_desc") }}
                         </p>
                     </div>
-                    <button 
+                    <button
                         type="button"
                         onclick={
                             let show_settings = show_settings.clone();
@@ -222,7 +232,7 @@ pub fn login(_props: &Props) -> Html {
                             <div class="flex justify-between items-center mb-1">
                                 <label class="block text-sm font-medium text-gray-700">{i18n.t("login.password")}</label>
                                 if !*is_registering {
-                                    <button 
+                                    <button
                                         type="button"
                                         class="text-xs text-blue-600 hover:text-blue-800"
                                         onclick={
@@ -303,4 +313,3 @@ pub fn login(_props: &Props) -> Html {
         </div>
     }
 }
-
