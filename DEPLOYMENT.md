@@ -157,5 +157,25 @@ If something isn't working, check the logs:
 docker-compose -f docker-compose.prod.yml logs -f
 ```
 
-### Backing up your data
-All your inventory data is stored in the `./data` folder. Simply copy this folder to a safe place to back it up.
+---
+
+## ❓ Troubleshooting
+
+### "Permission Denied" when running Docker
+If you see an error like `PermissionError: [Errno 13] Permission denied` or `Got permission denied while trying to connect to the Docker daemon socket`, it means your user doesn't have rights to use Docker.
+
+**Solution 1 (Quick):** Run all commands with `sudo`:
+```bash
+sudo ./deploy_server.sh --prebuilt
+```
+
+**Solution 2 (Permanent):** Add your user to the docker group:
+```bash
+sudo usermod -aG docker $USER
+# Then log out and log back in for changes to take effect.
+```
+
+### App is running but I can't see it
+1.  **Check logs:** `docker-compose -f docker-compose.prod.yml logs -f`
+2.  **Check Firewall:** Ensure port `8080` is open on your server (e.g., `sudo ufw allow 8080`).
+3.  **Check .env:** Ensure `HOST=0.0.0.0` is set so the app listens for outside connections.

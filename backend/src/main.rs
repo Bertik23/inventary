@@ -1,6 +1,6 @@
 use actix_cors::Cors;
 use actix_files as fs;
-use actix_web::{web, App, HttpServer};
+use actix_web::{middleware::Logger, web, App, HttpServer};
 use diesel::r2d2::{self, ConnectionManager};
 use std::env;
 
@@ -60,6 +60,7 @@ async fn main() -> std::io::Result<()> {
             let mut app = App::new()
                 .app_data(web::Data::new(pool.clone()))
                 .wrap(cors)
+                .wrap(Logger::default())
                 .service(handlers::add_item)
                 .service(handlers::remove_item)
                 .service(handlers::show_inventory)
@@ -95,9 +96,26 @@ async fn main() -> std::io::Result<()> {
                 .service(handlers::delete_custom_item_template);
 
             if let Some(ref dir) = static_dir {
+                let dir_copy = dir.clone();
                 app = app.service(
                     fs::Files::new("/", dir)
                         .index_file("index.html")
+                        .default_handler(
+                            move |req: actix_web::dev::ServiceRequest| {
+                                let (http_req, _payload) = req.into_parts();
+                                let dir_path = std::path::Path::new(&dir_copy);
+                                let index_path = dir_path.join("index.html");
+                                async move {
+                                    let file = actix_files::NamedFile::open(
+                                        index_path,
+                                    )?;
+                                    let res = file.into_response(&http_req);
+                                    Ok(actix_web::dev::ServiceResponse::new(
+                                        http_req, res,
+                                    ))
+                                }
+                            },
+                        )
                         .use_last_modified(true),
                 );
             }
