@@ -635,6 +635,26 @@ pub async fn register_user(
 
     use crate::schema::users::dsl::*;
 
+    // Check if username already exists (case-insensitive)
+    let existing_username = users
+        .filter(username.like(&req.username))
+        .first::<User>(&mut conn)
+        .ok();
+
+    if existing_username.is_some() {
+        return Err(actix_web::error::ErrorConflict("Username already taken"));
+    }
+
+    // Check if email already exists
+    let existing_email = users
+        .filter(email.eq(&req.email))
+        .first::<User>(&mut conn)
+        .ok();
+
+    if existing_email.is_some() {
+        return Err(actix_web::error::ErrorConflict("Email already taken"));
+    }
+
     // Check if any users exist. If not, make first user an admin.
     let user_count = users.count().get_result::<i64>(&mut conn).unwrap_or(0);
     let role_val = if user_count == 0 { "admin" } else { "user" };
@@ -719,14 +739,25 @@ pub async fn login_user(
 
     use crate::schema::users::dsl::*;
 
-    let user = users
-        .filter(username.eq(&req.username))
-        .first::<User>(&mut conn)
-        .map_err(|_| {
-            actix_web::error::ErrorUnauthorized("Invalid credentials")
-        })?;
+    let user_res = users
+        .filter(username.like(&req.username))
+        .first::<User>(&mut conn);
+
+    if let Err(e) = &user_res {
+        eprintln!(
+            "Login failed: User '{}' not found in database: {:?}",
+            req.username, e
+        );
+        return Err(actix_web::error::ErrorUnauthorized("Invalid credentials"));
+    }
+
+    let user = user_res.unwrap();
 
     if !verify(&req.password, &user.password_hash).unwrap_or(false) {
+        eprintln!(
+            "Login failed: Password mismatch for user '{}'",
+            req.username
+        );
         return Err(actix_web::error::ErrorUnauthorized("Invalid credentials"));
     }
 
@@ -1442,12 +1473,20 @@ pub async fn share_inventory(
     let inventory_id_param = path.into_inner();
     let mut conn = pool.get().expect("Failed to get DB connection");
 
-    // 1. Find user by username
-    use crate::schema::users::dsl::{username, users};
+    // 1. Find user by username or email (case-insensitive)
+    use crate::schema::users::dsl::{email, username, users};
     let user_to_share_with = users
-        .filter(username.eq(&req.username))
+        .filter(username.like(&req.username).or(email.like(&req.username)))
         .first::<User>(&mut conn)
-        .map_err(|_| actix_web::error::ErrorNotFound("User not found"))?;
+        .map_err(|e| {
+            eprintln!("Share failed: User identifier '{}' not found in database: {:?}", req.username, e);
+            actix_web::error::ErrorNotFound("User not found")
+        })?;
+
+    eprintln!(
+        "Sharing inventory '{}' with user '{}' (id: {})",
+        inventory_id_param, user_to_share_with.username, user_to_share_with.id
+    );
 
     // 2. Check if user is already in the inventory
     use crate::schema::inventory_users::dsl::{
