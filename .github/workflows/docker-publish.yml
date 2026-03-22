@@ -5,7 +5,7 @@ on:
     types: [published]
   push:
     branches:
-      - main
+      - master
     tags:
       - 'v*'
 
@@ -44,8 +44,8 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern=latest
-            # Tag with 'edge' on the default branch (main)
-            type=edge,branch=main
+            # Tag with 'edge' on the master branch
+            type=edge,branch=master
             # Tag with branch name and short SHA for every build
             type=ref,event=branch
             type=sha
