@@ -60,7 +60,8 @@ pub struct ProductInfo {
 }
 
 // User Models
-#[derive(Queryable, Serialize, Deserialize, Clone)]
+#[derive(Queryable, Serialize, Identifiable, Debug, Clone, PartialEq)]
+#[diesel(table_name = users)]
 pub struct User {
     pub id: String,
     pub username: String,
@@ -84,7 +85,6 @@ pub struct NewUser {
     pub password_hash: String,
     pub role: String,
 }
-
 #[derive(Deserialize)]
 pub struct ForgotPasswordRequest {
     pub email: String,

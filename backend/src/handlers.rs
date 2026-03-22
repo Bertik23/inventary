@@ -635,9 +635,11 @@ pub async fn register_user(
 
     use crate::schema::users::dsl::*;
 
+    let trimmed_username = req.username.trim();
+
     // Check if username already exists (case-insensitive)
     let existing_username = users
-        .filter(username.like(&req.username))
+        .filter(username.like(trimmed_username))
         .first::<User>(&mut conn)
         .ok();
 
@@ -661,12 +663,11 @@ pub async fn register_user(
 
     let new_user = NewUser {
         id: Uuid::new_v4().to_string(),
-        username: req.username.clone(),
+        username: trimmed_username.to_string(),
         email: req.email.clone(),
         password_hash: hashed_password,
         role: role_val.to_string(),
     };
-
     diesel::insert_into(crate::schema::users::table)
         .values(&new_user)
         .execute(&mut conn)
@@ -1473,13 +1474,15 @@ pub async fn share_inventory(
     let inventory_id_param = path.into_inner();
     let mut conn = pool.get().expect("Failed to get DB connection");
 
+    let search_term = req.username.trim();
+
     // 1. Find user by username or email (case-insensitive)
     use crate::schema::users::dsl::{email, username, users};
     let user_to_share_with = users
-        .filter(username.like(&req.username).or(email.like(&req.username)))
+        .filter(username.like(search_term).or(email.like(search_term)))
         .first::<User>(&mut conn)
         .map_err(|e| {
-            eprintln!("Share failed: User identifier '{}' not found in database: {:?}", req.username, e);
+            eprintln!("Share failed: User identifier '{}' not found in database: {:?}", search_term, e);
             actix_web::error::ErrorNotFound("User not found")
         })?;
 
