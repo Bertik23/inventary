@@ -1,5 +1,5 @@
 # Build stage for frontend
-FROM rust:1.85-slim-bullseye as frontend-builder
+FROM rust:1.94-slim-bullseye as frontend-builder
 RUN apt-get update && apt-get install -y pkg-config libssl-dev curl && \
     rustup target add wasm32-unknown-unknown && \
     curl -L https://github.com/trunk-rs/trunk/releases/latest/download/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xzf- -C /usr/local/bin
@@ -10,7 +10,7 @@ WORKDIR /app/frontend
 RUN trunk build --release
 
 # Build stage for backend
-FROM rust:1.85-slim-bullseye as backend-builder
+FROM rust:1.94-slim-bullseye as backend-builder
 RUN apt-get update && apt-get install -y pkg-config libsqlite3-dev libssl-dev
 
 WORKDIR /app

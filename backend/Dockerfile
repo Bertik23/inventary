@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.85-slim-bullseye as builder
+FROM rust:1.94-slim-bullseye as builder
 
 WORKDIR /app
 RUN apt-get update && apt-get install -y pkg-config libsqlite3-dev libssl-dev
