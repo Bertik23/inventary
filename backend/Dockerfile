@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.94-slim-bullseye as builder
+FROM rust:bookworm as builder
 
 WORKDIR /app
 RUN apt-get update && apt-get install -y pkg-config libsqlite3-dev libssl-dev
@@ -9,7 +9,7 @@ WORKDIR /app/backend
 RUN cargo build --release
 
 # Run stage
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 
 WORKDIR /app
 RUN apt-get update && apt-get install -y libsqlite3-0 ca-certificates && rm -rf /var/lib/apt/lists/*

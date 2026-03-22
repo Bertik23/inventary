@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.94-slim-bullseye as builder
+FROM rust:bookworm as builder
 
 # Install trunk and wasm-target
 RUN apt-get update && apt-get install -y pkg-config libssl-dev curl && \
