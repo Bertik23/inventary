@@ -32,14 +32,15 @@ pub fn admin() -> Html {
     let i18n = use_i18n();
 
     let current_user = match &*user_context.user {
-        Some(u) if u.role == "admin" => u.clone(),
+        Some(u) if u.role == "admin" || u.role == "moderator" => u.clone(),
         _ => {
             navigator.push(&Route::MainMenu);
             return html! {};
         }
     };
 
-    let active_tab = use_state(|| AdminTab::Users);
+    let is_admin = current_user.role == "admin";
+    let active_tab = use_state(|| if is_admin { AdminTab::Users } else { AdminTab::PendingProducts });
     let users = use_state(|| Vec::<User>::new());
     let pending_products = use_state(|| Vec::<PendingProduct>::new());
     let loading = use_state(|| true);
@@ -294,15 +295,17 @@ pub fn admin() -> Html {
 
             // Tab Switcher
             <div class="flex border-b border-gray-200 mb-6">
-                <button 
-                    onclick={let active_tab = active_tab.clone(); move |_| active_tab.set(AdminTab::Users)}
-                    class={classes!(
-                        "px-6", "py-2", "font-medium", "transition-colors", "border-b-2",
-                        if *active_tab == AdminTab::Users { "border-blue-600 text-blue-600" } else { "border-transparent text-gray-500 hover:text-gray-700" }
-                    )}
-                >
-                    {i18n.t("admin.users_list")}
-                </button>
+                if is_admin {
+                    <button 
+                        onclick={let active_tab = active_tab.clone(); move |_| active_tab.set(AdminTab::Users)}
+                        class={classes!(
+                            "px-6", "py-2", "font-medium", "transition-colors", "border-b-2",
+                            if *active_tab == AdminTab::Users { "border-blue-600 text-blue-600" } else { "border-transparent text-gray-500 hover:text-gray-700" }
+                        )}
+                    >
+                        {i18n.t("admin.users_list")}
+                    </button>
+                }
                 <button 
                     onclick={let active_tab = active_tab.clone(); move |_| active_tab.set(AdminTab::PendingProducts)}
                     class={classes!(
@@ -387,15 +390,26 @@ pub fn admin() -> Html {
                                                         disabled={is_current}
                                                         class={classes!(
                                                             "px-2", "py-1", "rounded-full", "text-xs", "font-medium", "transition-colors",
-                                                            if user.role == "admin" { "bg-purple-100 text-purple-700 hover:bg-purple-200" } else { "bg-blue-100 text-blue-700 hover:bg-blue-200" }
+                                                            if user.role == "admin" { "bg-purple-100 text-purple-700 hover:bg-purple-200" } 
+                                                            else if user.role == "moderator" { "bg-teal-100 text-teal-700 hover:bg-teal-200" }
+                                                            else { "bg-blue-100 text-blue-700 hover:bg-blue-200" }
                                                         )}
                                                     >
-                                                        {if user.role == "admin" { i18n.t("admin.admin_role") } else { i18n.t("admin.user_role") }}
+                                                        {if user.role == "admin" { i18n.t("admin.admin_role") } 
+                                                         else if user.role == "moderator" { i18n.t("admin.moderator_role") }
+                                                         else { i18n.t("admin.user_role") }}
                                                     </button>
-                                                </td>
-                                                <td class="p-4 text-right space-x-2">
+                                                    </td>
+                                                    <td class="p-4 text-right space-x-2">
                                                     if !is_current {
+                                                        <button 
+                                                            onclick={let on_update_role = on_update_role.clone(); let user_id = user.id.clone(); let next_role = if user.role == "moderator" { "user" } else { "moderator" }; move |_| on_update_role.emit((user_id.clone(), next_role.to_string()))}
+                                                            class="text-xs font-medium px-2 py-1 bg-teal-50 text-teal-700 rounded border border-teal-100 hover:bg-teal-100 transition"
+                                                        >
+                                                            {if user.role == "moderator" { i18n.t("admin.set_as_user") } else { i18n.t("admin.set_as_moderator") }}
+                                                        </button>
                                                         <button onclick={on_edit} class="text-xs font-medium px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition">
+
                                                             {i18n.t("admin.edit_user")}
                                                         </button>
                                                         <button onclick={on_reset} class="text-xs font-medium px-2 py-1 bg-yellow-50 text-yellow-700 rounded border border-yellow-100 hover:bg-yellow-100 transition">

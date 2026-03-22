@@ -247,6 +247,21 @@ pub fn main_menu(_props: &Props) -> Html {
                                     <p class="text-sm text-gray-500">{i18n.t("main_menu.admin_desc")}</p>
                                 </div>
                             </button>
+                        } else if user.role == "moderator" {
+                            <button
+                                onclick={on_admin_click}
+                                class="w-full group relative flex items-center p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-teal-300 transition-all duration-200 text-left"
+                            >
+                                <div class="flex-shrink-0 h-12 w-12 bg-teal-50 text-teal-600 rounded-lg flex items-center justify-center group-hover:bg-teal-600 group-hover:text-white transition-colors duration-200">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <div class="ml-4 flex-1">
+                                    <h3 class="text-lg font-medium text-gray-900">{i18n.t("main_menu.moderation_panel")}</h3>
+                                    <p class="text-sm text-gray-500">{i18n.t("main_menu.moderation_desc")}</p>
+                                </div>
+                            </button>
                         }
                     }
 

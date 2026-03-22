@@ -971,12 +971,13 @@ pub async fn list_pending_products(
     let mut conn = pool.get().expect("Failed to get DB connection");
     
     use crate::schema::users::dsl::*;
+    // Check if requester is admin or moderator
     let requester = users.find(admin_id)
         .first::<User>(&mut conn)
         .map_err(|_| actix_web::error::ErrorUnauthorized("Unauthorized"))?;
         
-    if requester.role != "admin" {
-        return Err(actix_web::error::ErrorForbidden("Admin access required"));
+    if requester.role != "admin" && requester.role != "moderator" {
+        return Err(actix_web::error::ErrorForbidden("Moderator access required"));
     }
     
     use crate::schema::pending_products::dsl::*;
@@ -1002,12 +1003,13 @@ pub async fn process_pending_product(
     let mut conn = pool.get().expect("Failed to get DB connection");
     
     use crate::schema::users::dsl::*;
+    // Check if requester is admin or moderator
     let requester = users.find(admin_id)
         .first::<User>(&mut conn)
         .map_err(|_| actix_web::error::ErrorUnauthorized("Unauthorized"))?;
         
-    if requester.role != "admin" {
-        return Err(actix_web::error::ErrorForbidden("Admin access required"));
+    if requester.role != "admin" && requester.role != "moderator" {
+        return Err(actix_web::error::ErrorForbidden("Moderator access required"));
     }
     
     match req.action.as_str() {

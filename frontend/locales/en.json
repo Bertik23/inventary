@@ -64,7 +64,9 @@
         "account_settings": "Account Settings",
         "account_desc": "Manage your profile and security",
         "admin_panel": "Admin Panel",
-        "admin_desc": "User management and system settings"
+        "admin_desc": "User management and system settings",
+        "moderation_panel": "Moderation Panel",
+        "moderation_desc": "Review and vet new products"
     },
     "inventory": {
         "title": "Inventory",
@@ -153,8 +155,8 @@
         "account_deleted": "Account deleted successfully"
     },
     "admin": {
-        "title": "User Management",
-        "users_list": "All Users",
+        "title": "Management Panel",
+        "users_list": "Users",
         "role_label": "Role",
         "actions": "Actions",
         "update_role": "Update Role",
@@ -162,8 +164,10 @@
         "admin_access_required": "Admin access required",
         "user_role": "User",
         "admin_role": "Admin",
+        "moderator_role": "Moderator",
         "set_as_admin": "Make Admin",
         "set_as_user": "Make User",
+        "set_as_moderator": "Make Moderator",
         "edit_user": "Edit User",
         "reset_password": "Reset Password",
         "delete_user": "Delete User",
@@ -175,8 +179,8 @@
         "user_deleted": "User deleted successfully",
         "delete_confirm_title": "Delete User?",
         "delete_confirm_desc": "Are you sure you want to delete user {name}? This cannot be undone.",
-        "pending_products": "Pending Products",
-        "process_product": "Process Product",
+        "pending_products": "Vetting Buffer",
+        "process_product": "Vet Product",
         "action_keep_local": "Keep Local",
         "action_contribute": "Contribute to OFF",
         "action_discard": "Discard",
