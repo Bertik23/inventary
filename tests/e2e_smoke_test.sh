@@ -54,13 +54,19 @@ fi
 
 # 4. Test Product Lookup (expect 404 for random barcode)
 echo -n "Testing product lookup (not found)... "
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_BASE/product/1234567890123")
+RANDOM_BARCODE="nonexistent_$(date +%s)_$RANDOM"
+# Store both body and status code
+RESP_FILE=$(mktemp)
+HTTP_CODE=$(curl -s -w "%{http_code}" -o "$RESP_FILE" "$API_BASE/product/$RANDOM_BARCODE")
 
 if [ "$HTTP_CODE" == "404" ]; then
     echo -e "${GREEN}PASS${NC}"
 else
     echo -e "${RED}FAIL${NC} (Got $HTTP_CODE)"
+    echo "Response body: $(cat "$RESP_FILE")"
+    rm "$RESP_FILE"
     exit 1
 fi
+rm "$RESP_FILE"
 
 echo -e "\n${GREEN}All smoke tests passed!${NC}"
