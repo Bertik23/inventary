@@ -25,13 +25,18 @@ jobs:
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@stable
       with:
-        components: rustfmt, clippy
+        components: clippy
+
+    - name: Set up Nightly Rust (for rustfmt)
+      uses: dtolnay/rust-toolchain@nightly
+      with:
+        components: rustfmt
 
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
 
     - name: Check Formatting
-      run: cargo fmt --all -- --check
+      run: cargo +nightly fmt --all -- --check
 
     - name: Backend Tests
       run: cargo test -p inventary-backend
