@@ -1,0 +1,17 @@
+services:
+  inventory:
+    build:
+      context: .
+      dockerfile: Dockerfile.combined
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - RUST_LOG=info
+      - DATABASE_URL=sqlite:///app/data/inventory.db
+      - STATIC_FILES_DIR=/app/static
+      # Set these if you want to enable OFF contributions in production
+      - OFF_USERNAME=${OFF_USERNAME:-}
+      - OFF_PASSWORD=${OFF_PASSWORD:-}
+    restart: unless-stopped

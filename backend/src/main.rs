@@ -1,4 +1,5 @@
 use actix_cors::Cors;
+use actix_files as fs;
 use actix_web::{web, App, HttpServer};
 use diesel::r2d2::{self, ConnectionManager};
 use std::env;
@@ -25,6 +26,8 @@ async fn main() -> std::io::Result<()> {
         env::var("DATABASE_TYPE").unwrap_or_else(|_| "sqlite".to_string());
     let _db_password = env::var("DATABASE_PASSWORD").ok();
 
+    let static_files_dir = env::var("STATIC_FILES_DIR").ok();
+
     // Run migrations
     if database_type == "sqlite" {
         // Strip sqlite:// prefix if present (Diesel CLI uses it, but ConnectionManager needs just the path)
@@ -45,47 +48,66 @@ async fn main() -> std::io::Result<()> {
         conn.run_pending_migrations(MIGRATIONS)
             .expect("Failed to run migrations");
 
-        println!("Server starting on http://127.0.0.1:8080");
+        let host = env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+        let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
+        let bind_address = format!("{}:{}", host, port);
+
+        let static_dir = static_files_dir.clone();
+
+        println!("Server starting on http://{}", bind_address);
         HttpServer::new(move || {
             let cors = Cors::permissive();
-            App::new()
+            let mut app = App::new()
                 .app_data(web::Data::new(pool.clone()))
                 .wrap(cors)
-                .service(handlers::add_item)
-                .service(handlers::remove_item)
-                .service(handlers::show_inventory)
-                .service(handlers::search_inventory)
-                .service(handlers::search_product)
-                .service(handlers::get_item_by_barcode)
-                .service(handlers::register_user)
-                .service(handlers::login_user)
-                .service(handlers::forgot_password)
-                .service(handlers::reset_password)
-                .service(handlers::update_user)
-                .service(handlers::change_password)
-                .service(handlers::delete_user)
-                .service(handlers::list_users)
-                .service(handlers::update_user_role)
-                .service(handlers::admin_update_user)
-                .service(handlers::admin_reset_password)
-                .service(handlers::admin_delete_user)
-                .service(handlers::buffer_unknown_product)
-                .service(handlers::list_pending_products)
-                .service(handlers::process_pending_product)
-                .service(handlers::list_custom_products)
-                .service(handlers::update_custom_product)
-                .service(handlers::delete_custom_product)
-                .service(handlers::create_inventory)
-                .service(handlers::get_user_inventories)
-                .service(handlers::share_inventory)
-                .service(handlers::get_inventory_users)
-                .service(handlers::unshare_inventory)
-                .service(handlers::get_custom_item_templates)
-                .service(handlers::create_custom_item_template)
-                .service(handlers::update_custom_item_template)
-                .service(handlers::delete_custom_item_template)
+                .service(
+                    web::scope("/api")
+                        .service(handlers::add_item)
+                        .service(handlers::remove_item)
+                        .service(handlers::show_inventory)
+                        .service(handlers::search_inventory)
+                        .service(handlers::search_product)
+                        .service(handlers::get_item_by_barcode)
+                        .service(handlers::register_user)
+                        .service(handlers::login_user)
+                        .service(handlers::forgot_password)
+                        .service(handlers::reset_password)
+                        .service(handlers::update_user)
+                        .service(handlers::change_password)
+                        .service(handlers::delete_user)
+                        .service(handlers::list_users)
+                        .service(handlers::update_user_role)
+                        .service(handlers::admin_update_user)
+                        .service(handlers::admin_reset_password)
+                        .service(handlers::admin_delete_user)
+                        .service(handlers::buffer_unknown_product)
+                        .service(handlers::list_pending_products)
+                        .service(handlers::process_pending_product)
+                        .service(handlers::list_custom_products)
+                        .service(handlers::update_custom_product)
+                        .service(handlers::delete_custom_product)
+                        .service(handlers::create_inventory)
+                        .service(handlers::get_user_inventories)
+                        .service(handlers::share_inventory)
+                        .service(handlers::get_inventory_users)
+                        .service(handlers::unshare_inventory)
+                        .service(handlers::get_custom_item_templates)
+                        .service(handlers::create_custom_item_template)
+                        .service(handlers::update_custom_item_template)
+                        .service(handlers::delete_custom_item_template),
+                );
+
+            if let Some(ref dir) = static_dir {
+                app = app.service(
+                    fs::Files::new("/", dir)
+                        .index_file("index.html")
+                        .use_last_modified(true),
+                );
+            }
+
+            app
         })
-        .bind("127.0.0.1:8080")?
+        .bind(bind_address)?
         .run()
         .await
     } else {
@@ -97,33 +119,5 @@ async fn main() -> std::io::Result<()> {
         eprintln!("Postgres support is not fully implemented yet. Please use SQLite for now.");
         eprintln!("To add Postgres support, create handlers that use diesel::PgConnection.");
         std::process::exit(1);
-
-        // Uncomment and implement when Postgres handlers are ready:
-        /*
-        let manager = ConnectionManager::<diesel::PgConnection>::new(&database_url);
-        let pool = r2d2::Pool::builder()
-            .build(manager)
-            .expect("Failed to create pool");
-
-        diesel_migrations::embed_migrations!();
-        embedded_migrations::run(&mut pool.get().unwrap())
-            .expect("Failed to run migrations");
-
-        println!("Server starting on http://127.0.0.1:8080");
-        HttpServer::new(move || {
-            let cors = Cors::permissive();
-            App::new()
-                .app_data(web::Data::new(pool.clone()))
-                .wrap(cors)
-                .service(handlers_postgres::add_item)
-                .service(handlers_postgres::remove_item)
-                .service(handlers_postgres::show_inventory)
-                .service(handlers::search_product)
-                .service(handlers::get_item_by_barcode)
-        })
-        .bind("127.0.0.1:8080")?
-        .run()
-        .await
-        */
     }
 }

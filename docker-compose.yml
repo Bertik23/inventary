@@ -1,0 +1,25 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - RUST_LOG=info
+      # Set these if you want to enable OFF contributions in production
+      - OFF_USERNAME=${OFF_USERNAME:-}
+      - OFF_PASSWORD=${OFF_PASSWORD:-}
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

@@ -3,15 +3,26 @@ use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, RequestMode, Response};
 
-const DEFAULT_API_BASE: &str = "http://127.0.0.1:8080/api";
+const DEFAULT_API_BASE: &str = "/api";
 
 pub fn get_api_base() -> String {
     let window = web_sys::window().unwrap();
     let local_storage = window.local_storage().unwrap().unwrap();
-    local_storage
+    let base = local_storage
         .get_item("api_base")
         .unwrap()
-        .unwrap_or_else(|| DEFAULT_API_BASE.to_string())
+        .unwrap_or_else(|| DEFAULT_API_BASE.to_string());
+
+    if base.starts_with("http") {
+        base
+    } else {
+        // Construct full URL from current location if it's a relative path
+        let location = window.location();
+        let origin = location
+            .origin()
+            .unwrap_or_else(|_| "http://localhost:8080".to_string());
+        format!("{}{}", origin, base)
+    }
 }
 
 pub fn set_api_base(url: &str) {

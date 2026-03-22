@@ -149,6 +149,42 @@ The frontend is built with:
 - WebAssembly for performance
 - PWA capabilities for offline support
 
+## Deployment
+
+### Easy Server Deployment (Docker Combined)
+
+The easiest way to deploy the entire system is using the provided Docker configuration. This builds both the frontend and backend into a single container.
+
+1.  **Clone the repository and navigate to the directory.**
+2.  **Run the deployment script:**
+    ```bash
+    ./deploy_server.sh
+    ```
+    This script will:
+    - Create a `./data` directory for the SQLite database.
+    - Build a combined Docker image for the frontend and backend.
+    - Start the service on port 8080.
+
+3.  **Access the application:**
+    Open `http://your-server-ip:8080` in your browser.
+
+### Manual Server Deployment (Docker Compose)
+
+You can also run things separately using the standard `docker-compose.yml`:
+```bash
+docker-compose up --build
+```
+
+## Mobile App
+
+This application is a **Progressive Web App (PWA)**. You can "install" it on your mobile device without an app store:
+
+1.  **Host the application on a server with HTTPS** (required for PWA).
+2.  **On Android (Chrome):** Tap the menu icon and select "Install app" or "Add to Home screen".
+3.  **On iOS (Safari):** Tap the "Share" icon and select "Add to Home Screen".
+
+For more details, see `./build_mobile.sh`.
+
 ## License
 
 This project is open source and available for use.

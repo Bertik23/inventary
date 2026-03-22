@@ -1,0 +1,38 @@
+# Build stage for frontend
+FROM rust:1.83-slim-bullseye as frontend-builder
+RUN apt-get update && apt-get install -y pkg-config libssl-dev && \
+    cargo install trunk && \
+    rustup target add wasm32-unknown-unknown
+WORKDIR /app
+COPY . .
+WORKDIR /app/frontend
+RUN trunk build --release
+
+# Build stage for backend
+FROM rust:1.83-slim-bullseye as backend-builder
+RUN apt-get update && apt-get install -y pkg-config libsqlite3-dev libssl-dev
+WORKDIR /app
+COPY . .
+WORKDIR /app/backend
+RUN cargo build --release
+
+# Final run stage
+FROM debian:bullseye-slim
+WORKDIR /app
+RUN apt-get update && apt-get install -y libsqlite3-0 ca-certificates && rm -rf /var/lib/apt/lists/*
+
+COPY --from=backend-builder /app/target/release/inventary-backend /app/inventary-backend
+COPY --from=backend-builder /app/backend/migrations /app/migrations
+COPY --from=frontend-builder /app/frontend/dist /app/static
+
+# Ensure database directory exists
+RUN mkdir -p /app/data
+
+ENV DATABASE_URL=sqlite:///app/data/inventory.db
+ENV STATIC_FILES_DIR=/app/static
+ENV PORT=8080
+ENV HOST=0.0.0.0
+
+EXPOSE 8080
+
+CMD ["/app/inventary-backend"]
