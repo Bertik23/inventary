@@ -1,6 +1,6 @@
 use crate::api::{
-    fetch_inventory, get_inventory_categories, update_item, InventoryCategory,
-    InventoryItem, UpdateItemRequest,
+    fetch_inventory, get_inventory_categories, remove_item, update_item,
+    InventoryCategory, InventoryItem, RemoveItemRequest, UpdateItemRequest,
 };
 use crate::app::InventoryContext;
 use crate::i18n::use_i18n;
@@ -133,10 +133,40 @@ pub fn inventory_list(_props: &Props) -> Html {
         let i18n = i18n.clone();
         let cat_map = cat_map.clone();
         let on_edit = on_edit.clone();
+        let fetch_data = fetch_data.clone();
+        let inventory_id = inventory_id.clone();
+
         move |item: &InventoryItem| {
             let item_clone = item.clone();
+            let on_quick_remove = {
+                let item_id = item.id.clone();
+                let inventory_id = inventory_id.clone();
+                let fetch_data = fetch_data.clone();
+                Callback::from(move |e: MouseEvent| {
+                    e.stop_propagation();
+                    let item_id = item_id.clone();
+                    let inventory_id = inventory_id.clone();
+                    let fetch_data = fetch_data.clone();
+                    wasm_bindgen_futures::spawn_local(async move {
+                        let req = RemoveItemRequest {
+                            inventory_id,
+                            barcode: None,
+                            id: Some(item_id),
+                            name: None,
+                            quantity: Some(1.0),
+                        };
+                        if let Ok(_) = remove_item(req).await {
+                            fetch_data.emit(());
+                        }
+                    });
+                })
+            };
+
             html! {
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-2 hover:shadow-md transition group">
+                <div
+                    onclick={on_edit(item_clone.clone())}
+                    class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-2 hover:shadow-md transition group cursor-pointer"
+                >
                     <div class="flex justify-between items-start">
                         <div class="flex flex-col gap-1 min-w-0">
                             <h3 class="font-semibold text-gray-900 truncate">{&item.name}</h3>
@@ -150,15 +180,25 @@ pub fn inventory_list(_props: &Props) -> Html {
                             <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded-full whitespace-nowrap">
                                 {i18n.t_with("inventory.qty", vec![("qty", &format_quantity(item.quantity.into())), ("unit", &item.unit)])}
                             </span>
-                            <button
-                                onclick={on_edit(item_clone)}
-                                class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                title={i18n.t("common.edit")}
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                                </svg>
-                            </button>
+                            <div class="flex gap-1">
+                                <button
+                                    onclick={on_quick_remove}
+                                    class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title={i18n.t("common.remove_one")}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+                                    </svg>
+                                </button>
+                                <button
+                                    class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    title={i18n.t("common.edit")}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -237,15 +277,18 @@ pub fn inventory_list(_props: &Props) -> Html {
         let editing_item = editing_item.clone();
         let categories = categories.clone();
         let fetch_data = fetch_data.clone();
+        let inventory_id = inventory_id.clone();
 
         move |item: InventoryItem| {
             let editing_item_close = editing_item.clone();
             let editing_item_success = editing_item.clone();
             let categories = categories.clone();
             let fetch_data = fetch_data.clone();
+            let inventory_id = inventory_id.clone();
 
             html! {
                 <ItemEditor
+                    inventory_id={inventory_id}
                     item={item}
                     available_categories={(*categories).clone()}
                     on_close={Callback::from(move |_| editing_item_close.set(None))}
@@ -372,6 +415,7 @@ pub fn inventory_list(_props: &Props) -> Html {
 
 #[derive(Properties, PartialEq)]
 struct EditorProps {
+    inventory_id: String,
     item: InventoryItem,
     available_categories: Vec<InventoryCategory>,
     on_close: Callback<()>,
@@ -419,6 +463,42 @@ fn item_editor(props: &EditorProps) -> Html {
                 };
 
                 match update_item(&item_id, req).await {
+                    Ok(_) => on_success.emit(()),
+                    Err(e) => {
+                        error.set(Some(e));
+                        loading.set(false);
+                    }
+                }
+            });
+        })
+    };
+
+    let on_delete = {
+        let item_id = props.item.id.clone();
+        let inventory_id = props.inventory_id.clone();
+        let current_qty = props.item.quantity;
+        let loading = loading.clone();
+        let error = error.clone();
+        let on_success = props.on_success.clone();
+
+        Callback::from(move |_| {
+            let item_id = item_id.clone();
+            let inventory_id = inventory_id.clone();
+            let loading = loading.clone();
+            let error = error.clone();
+            let on_success = on_success.clone();
+
+            loading.set(true);
+            wasm_bindgen_futures::spawn_local(async move {
+                let req = RemoveItemRequest {
+                    inventory_id,
+                    barcode: None,
+                    id: Some(item_id),
+                    name: None,
+                    quantity: Some(current_qty),
+                };
+
+                match remove_item(req).await {
                     Ok(_) => on_success.emit(()),
                     Err(e) => {
                         error.set(Some(e));
@@ -527,24 +607,37 @@ fn item_editor(props: &EditorProps) -> Html {
                         </div>
                     </div>
 
-                    <div class="flex gap-3 pt-4 border-t border-gray-100">
+                    <div class="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
                         <button
                             type="button"
-                            onclick={let on_close = props.on_close.clone(); move |_| on_close.emit(())}
-                            class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition"
-                        >
-                            { i18n.t("common.cancel") }
-                        </button>
-                        <button
-                            type="submit"
+                            onclick={on_delete}
                             disabled={*loading}
-                            class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                            class="px-4 py-2 bg-red-50 text-red-600 rounded-lg font-medium hover:bg-red-100 transition flex items-center justify-center gap-2"
                         >
-                            if *loading {
-                                <div class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                            }
-                            { i18n.t("common.save") }
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                            </svg>
+                            { i18n.t("common.delete") }
                         </button>
+                        <div class="flex-1 flex gap-3">
+                            <button
+                                type="button"
+                                onclick={let on_close = props.on_close.clone(); move |_| on_close.emit(())}
+                                class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition"
+                            >
+                                { i18n.t("common.cancel") }
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={*loading}
+                                class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                if *loading {
+                                    <div class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                                }
+                                { i18n.t("common.save") }
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>

@@ -4,6 +4,7 @@
         "save": "Uložit",
         "delete": "Smazat",
         "edit": "Upravit",
+        "remove_one": "-1",
         "cancel": "Zrušit",
         "loading": "Načítání...",
         "error": "Chyba: {e}",
