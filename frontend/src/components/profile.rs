@@ -152,7 +152,6 @@ pub fn profile() -> Html {
         let navigator = navigator.clone();
         let loading = loading.clone();
         let error = error.clone();
-        let i18n = i18n.clone();
 
         Callback::from(move |_| {
             let user_id = user_id.clone();

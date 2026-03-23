@@ -225,7 +225,6 @@ pub fn barcode_scanner(props: &Props) -> Html {
     };
 
     let on_submit_unknown = {
-        let is_unknown = is_unknown.clone();
         let unknown_barcode = unknown_barcode.clone();
         let unknown_name = unknown_name.clone();
         let unknown_brand = unknown_brand.clone();
@@ -321,7 +320,6 @@ pub fn barcode_scanner(props: &Props) -> Html {
             message.set(None);
             let selected = selected.clone();
             let loading = loading.clone();
-            let message = message.clone();
             let barcode_input = barcode_input.clone();
             let barcode_trimmed = barcode.trim().to_string();
             let inv_id = inventory_id.clone();
@@ -329,7 +327,6 @@ pub fn barcode_scanner(props: &Props) -> Html {
             let is_unknown = is_unknown.clone();
             let unknown_barcode = unknown_barcode.clone();
             let unknown_name = unknown_name.clone();
-            let i18n = i18n.clone();
 
             wasm_bindgen_futures::spawn_local(async move {
                 match get_product_by_barcode(&barcode_trimmed, Some(&inv_id))

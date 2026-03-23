@@ -148,7 +148,6 @@ pub fn inventory_selection(_props: &Props) -> Html {
                             let inventory_context = inventory_context.clone();
                             let navigator = navigator.clone();
                             let id = inv.id.clone();
-                            let name = inv.name.clone();
                             let i18n = i18n.clone();
 
                             let on_select = {

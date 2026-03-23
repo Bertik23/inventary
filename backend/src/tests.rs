@@ -333,8 +333,6 @@ mod tests {
         let resp = test::call_service(&app, req).await;
         assert!(resp.status().is_success());
         let users: Vec<User> = test::read_body_json(resp).await;
-        // There's a default user from migrations likely, or just our two.
-        // Based on register_user handler, first user gets "admin", others "user".
         assert!(users.len() >= 2);
 
         // 2. Update Role
@@ -349,13 +347,6 @@ mod tests {
         assert!(resp.status().is_success());
 
         // 3. Delete User
-        let req = test::TestRequest::delete()
-            .uri(&format!(
-                "/api/admin/users/{}$?admin_id={}",
-                user_id, admin_id
-            ))
-            .to_request();
-        // Wait, I put a $ in URI by mistake in thought, but let's fix it.
         let req = test::TestRequest::delete()
             .uri(&format!(
                 "/api/admin/users/{}?admin_id={}",
