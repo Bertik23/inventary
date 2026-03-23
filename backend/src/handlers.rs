@@ -8,6 +8,7 @@ use diesel::prelude::*;
 use diesel::r2d2::ConnectionManager;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
+use serde::Deserialize;
 use serde_json;
 use std::env;
 use uuid::Uuid;
@@ -73,16 +74,40 @@ pub async fn show_inventory(
 
     let mut conn = pool.get().expect("Failed to get DB connection");
 
-    use crate::schema::inventory_items::dsl::inventory_id;
+    use crate::schema::inventory_items::dsl::inventory_id as inv_id;
     let items = inventory_items::table
-        .filter(inventory_id.eq(inventory_id_param))
+        .filter(inv_id.eq(inventory_id_param))
         .load::<InventoryItem>(&mut conn)
         .map_err(|e| {
             eprintln!("Error loading inventory: {:?}", e);
             actix_web::error::ErrorInternalServerError("Database error")
         })?;
 
-    Ok(HttpResponse::Ok().json(items))
+    // Load category IDs for each item
+    let mut response_items = Vec::new();
+    for item in items {
+        use crate::schema::item_categories::dsl::*;
+        let ids = item_categories
+            .filter(item_id.eq(&item.id))
+            .select(category_id)
+            .load::<String>(&mut conn)
+            .unwrap_or_default();
+
+        response_items.push(InventoryItemResponse {
+            id: item.id,
+            inventory_id: item.inventory_id,
+            barcode: item.barcode,
+            name: item.name,
+            quantity: item.quantity,
+            unit: item.unit,
+            product_data: item.product_data,
+            created_at: item.created_at,
+            updated_at: item.updated_at,
+            category_ids: ids,
+        });
+    }
+
+    Ok(HttpResponse::Ok().json(response_items))
 }
 
 #[actix_web::post("/api/inventory/add")]
@@ -130,10 +155,8 @@ pub async fn add_item(
 
     // 2. Determine the unit to use
     let unit_val = if let Some(ref item) = existing_item {
-        // Use existing item's unit
         item.unit.clone()
     } else {
-        // Check for template/config
         use crate::schema::custom_item_templates::dsl::*;
         let template = custom_item_templates
             .filter(
@@ -142,7 +165,7 @@ pub async fn add_item(
                     .or(inventory_id.is_null()),
             )
             .filter(name.eq(&item_name))
-            .order(inventory_id.desc()) // Inventory-specific first (non-null > null)
+            .order(inventory_id.desc())
             .first::<CustomItemTemplate>(&mut conn)
             .ok();
 
@@ -158,8 +181,7 @@ pub async fn add_item(
         serde_json::to_string(product_info.as_ref().unwrap()).ok()
     });
 
-    if let Some(mut item) = existing_item {
-        // Update existing item
+    let item_id_val = if let Some(ref item) = existing_item {
         use crate::schema::inventory_items::dsl::{quantity, updated_at};
         diesel::update(inventory_items::table.find(&item.id))
             .set((
@@ -171,11 +193,8 @@ pub async fn add_item(
                 eprintln!("Error updating item: {:?}", e);
                 actix_web::error::ErrorInternalServerError("Database error")
             })?;
-
-        item.quantity += qty;
-        Ok(HttpResponse::Ok().json(item))
+        item.id.clone()
     } else {
-        // Create new item
         let new_item = NewInventoryItem {
             id: Uuid::new_v4().to_string(),
             inventory_id: req.inventory_id.clone(),
@@ -193,18 +212,112 @@ pub async fn add_item(
                 eprintln!("Error inserting item: {:?}", e);
                 actix_web::error::ErrorInternalServerError("Database error")
             })?;
+        new_item.id
+    };
 
-        use crate::schema::inventory_items::dsl::id;
-        let created_item = inventory_items::table
-            .filter(id.eq(&new_item.id))
-            .first::<InventoryItem>(&mut conn)
-            .map_err(|e| {
-                eprintln!("Error loading created item: {:?}", e);
-                actix_web::error::ErrorInternalServerError("Database error")
-            })?;
+    // Handle Categories
+    let mut category_ids_to_link = Vec::new();
 
-        Ok(HttpResponse::Created().json(created_item))
+    // A. Manual Categories
+    if let Some(ref cats) = req.categories {
+        for cat_name_or_id in cats {
+            use crate::schema::inventory_categories::dsl::*;
+            let existing_cat = inventory_categories
+                .filter(inventory_id.eq(&req.inventory_id))
+                .filter(id.eq(cat_name_or_id).or(name.like(cat_name_or_id)))
+                .first::<InventoryCategory>(&mut conn)
+                .ok();
+
+            if let Some(cat) = existing_cat {
+                category_ids_to_link.push(cat.id);
+            } else {
+                let new_cat = NewInventoryCategory {
+                    id: Uuid::new_v4().to_string(),
+                    inventory_id: req.inventory_id.clone(),
+                    name: cat_name_or_id.clone(),
+                    parent_id: None,
+                };
+                diesel::insert_into(inventory_categories)
+                    .values(&new_cat)
+                    .execute(&mut conn)
+                    .ok();
+                category_ids_to_link.push(new_cat.id);
+            }
+        }
     }
+
+    // B. Automatic Categories from OFF (only if no manual categories provided)
+    if category_ids_to_link.is_empty() {
+        if let Some(ref info) = product_info {
+            for cat_name in &info.categories {
+                use crate::schema::inventory_categories::dsl::*;
+                let existing_cat = inventory_categories
+                    .filter(inventory_id.eq(&req.inventory_id))
+                    .filter(name.like(cat_name))
+                    .first::<InventoryCategory>(&mut conn)
+                    .ok();
+
+                if let Some(cat) = existing_cat {
+                    category_ids_to_link.push(cat.id);
+                } else {
+                    let new_cat = NewInventoryCategory {
+                        id: Uuid::new_v4().to_string(),
+                        inventory_id: req.inventory_id.clone(),
+                        name: cat_name.clone(),
+                        parent_id: None,
+                    };
+                    if diesel::insert_into(inventory_categories)
+                        .values(&new_cat)
+                        .execute(&mut conn)
+                        .is_ok()
+                    {
+                        category_ids_to_link.push(new_cat.id);
+                    }
+                }
+            }
+        }
+    }
+
+    // Link item to categories
+    for cat_id_val in category_ids_to_link {
+        use crate::schema::item_categories::dsl::*;
+        diesel::insert_into(item_categories)
+            .values((item_id.eq(&item_id_val), category_id.eq(cat_id_val)))
+            .execute(&mut conn)
+            .ok(); // Ignore duplicates
+    }
+
+    use crate::schema::inventory_items::dsl::id;
+    let created_item = inventory_items::table
+        .filter(id.eq(&item_id_val))
+        .first::<InventoryItem>(&mut conn)
+        .map_err(|e| {
+            eprintln!("Error loading created item: {:?}", e);
+            actix_web::error::ErrorInternalServerError("Database error")
+        })?;
+
+    // Attach category IDs to response
+    let final_category_ids = {
+        use crate::schema::item_categories::dsl::*;
+        item_categories
+            .filter(item_id.eq(&created_item.id))
+            .select(category_id)
+            .load::<String>(&mut conn)
+            .unwrap_or_default()
+    };
+
+    Ok(HttpResponse::Created().json(InventoryItemResponse {
+        id: created_item.id,
+        inventory_id: created_item.inventory_id,
+        barcode: created_item.barcode,
+        name: created_item.name,
+        quantity: created_item.quantity,
+        unit: created_item.unit,
+        product_data: created_item.product_data,
+        created_at: created_item.created_at,
+        updated_at: created_item.updated_at,
+        category_ids: final_category_ids,
+    }))
 }
 
 #[actix_web::post("/api/inventory/remove")]
@@ -259,7 +372,18 @@ pub async fn remove_item(
                 actix_web::error::ErrorInternalServerError("Database error")
             })?;
 
-        Ok(HttpResponse::Ok().json(item))
+        Ok(HttpResponse::Ok().json(InventoryItemResponse {
+            id: item.id,
+            inventory_id: item.inventory_id,
+            barcode: item.barcode,
+            name: item.name,
+            quantity: 0.0, // It's removed
+            unit: item.unit,
+            product_data: item.product_data,
+            created_at: item.created_at,
+            updated_at: item.updated_at,
+            category_ids: vec![],
+        }))
     } else {
         // Decrease quantity
         use crate::schema::inventory_items::dsl::{quantity, updated_at};
@@ -282,8 +406,126 @@ pub async fn remove_item(
                 actix_web::error::ErrorInternalServerError("Database error")
             })?;
 
-        Ok(HttpResponse::Ok().json(updated_item))
+        let ids = {
+            use crate::schema::item_categories::dsl::*;
+            item_categories
+                .filter(item_id.eq(&updated_item.id))
+                .select(category_id)
+                .load::<String>(&mut conn)
+                .unwrap_or_default()
+        };
+
+        Ok(HttpResponse::Ok().json(InventoryItemResponse {
+            id: updated_item.id,
+            inventory_id: updated_item.inventory_id,
+            barcode: updated_item.barcode,
+            name: updated_item.name,
+            quantity: updated_item.quantity,
+            unit: updated_item.unit,
+            product_data: updated_item.product_data,
+            created_at: updated_item.created_at,
+            updated_at: updated_item.updated_at,
+            category_ids: ids,
+        }))
     }
+}
+
+#[actix_web::put("/api/inventory/items/{item_id}")]
+pub async fn update_item(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+    req: web::Json<UpdateItemRequest>,
+) -> Result<HttpResponse> {
+    let item_id_param = path.into_inner();
+    let mut conn = pool.get().expect("Failed to get DB connection");
+
+    conn.transaction::<_, diesel::result::Error, _>(|conn| {
+        use crate::schema::inventory_items::dsl::*;
+
+        // 1. Update item fields
+        let mut update_count = 0;
+        if let Some(ref new_name) = req.name {
+            diesel::update(inventory_items.find(&item_id_param))
+                .set(name.eq(new_name))
+                .execute(conn)?;
+            update_count += 1;
+        }
+
+        if let Some(new_qty) = req.quantity {
+            diesel::update(inventory_items.find(&item_id_param))
+                .set(quantity.eq(new_qty))
+                .execute(conn)?;
+            update_count += 1;
+        }
+
+        if let Some(ref new_unit) = req.unit {
+            diesel::update(inventory_items.find(&item_id_param))
+                .set(unit.eq(new_unit))
+                .execute(conn)?;
+            update_count += 1;
+        }
+
+        if update_count > 0 {
+            diesel::update(inventory_items.find(&item_id_param))
+                .set(updated_at.eq(Utc::now().naive_utc()))
+                .execute(conn)?;
+        }
+
+        // 2. Update categories if provided
+        if let Some(ref new_category_ids) = req.categories {
+            use crate::schema::item_categories::dsl::*;
+
+            // Delete old links
+            diesel::delete(item_categories.filter(item_id.eq(&item_id_param)))
+                .execute(conn)?;
+
+            // Insert new links
+            for cat_id in new_category_ids {
+                diesel::insert_into(item_categories)
+                    .values((
+                        item_id.eq(&item_id_param),
+                        category_id.eq(cat_id),
+                    ))
+                    .execute(conn)?;
+            }
+        }
+
+        Ok(())
+    })
+    .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+
+    // Return updated item
+    let mut conn = pool.get().expect("Failed to get DB connection");
+    use crate::schema::inventory_items::dsl::{id, inventory_items};
+    let item = inventory_items
+        .filter(id.eq(&item_id_param))
+        .first::<InventoryItem>(&mut conn)
+        .map_err(|e| {
+            eprintln!("Error loading updated item: {:?}", e);
+            actix_web::error::ErrorInternalServerError("Database error")
+        })?;
+
+    let ids = {
+        use crate::schema::item_categories::dsl::*;
+        item_categories
+            .filter(item_id.eq(&item.id))
+            .select(category_id)
+            .load::<String>(&mut conn)
+            .unwrap_or_default()
+    };
+
+    Ok(HttpResponse::Ok().json(InventoryItemResponse {
+        id: item.id,
+        inventory_id: item.inventory_id,
+        barcode: item.barcode,
+        name: item.name,
+        quantity: item.quantity,
+        unit: item.unit,
+        product_data: item.product_data,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+        category_ids: ids,
+    }))
 }
 
 #[actix_web::get("/api/inventory/templates")]
@@ -649,7 +891,7 @@ pub async fn register_user(
 
     // Check if email already exists
     let existing_email = users
-        .filter(email.eq(&req.email))
+        .filter(email.eq(Some(&req.email)))
         .first::<User>(&mut conn)
         .ok();
 
@@ -664,8 +906,9 @@ pub async fn register_user(
     let new_user = NewUser {
         id: Uuid::new_v4().to_string(),
         username: trimmed_username.to_string(),
-        email: req.email.clone(),
         password_hash: hashed_password,
+        created_at: Utc::now().naive_utc(),
+        email: Some(req.email.clone()),
         role: role_val.to_string(),
     };
     diesel::insert_into(crate::schema::users::table)
@@ -724,10 +967,9 @@ pub async fn create_inventory(
     Ok(HttpResponse::Created().json(new_inv))
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Deserialize)]
 pub struct LoginRequest {
     pub username: String,
-    pub email: Option<String>,
     pub password: String,
 }
 
@@ -775,7 +1017,7 @@ pub async fn forgot_password(
     use crate::schema::users::dsl::*;
 
     let user = users
-        .filter(email.eq(&req.email))
+        .filter(email.eq(Some(&req.email)))
         .first::<User>(&mut conn)
         .ok();
 
@@ -793,9 +1035,11 @@ pub async fn forgot_password(
                 actix_web::error::ErrorInternalServerError(e.to_string())
             })?;
 
-        if let Err(e) = send_reset_email(&user_val.email, &token) {
-            eprintln!("Email error: {}", e);
-            // Don't return error to user for security (not leaking email existence)
+        if let Some(ref email_val) = user_val.email {
+            if let Err(e) = send_reset_email(email_val, &token) {
+                eprintln!("Email error: {}", e);
+                // Don't return error to user for security (not leaking email existence)
+            }
         }
     }
 
@@ -872,7 +1116,7 @@ pub async fn update_user(
 
     if let Some(ref new_email) = req.email {
         diesel::update(users.find(&user_id_param))
-            .set(email.eq(new_email))
+            .set(email.eq(Some(new_email)))
             .execute(&mut conn)
             .map_err(|e| {
                 actix_web::error::ErrorInternalServerError(e.to_string())
@@ -1001,7 +1245,7 @@ pub async fn admin_update_user(
 
     if let Some(ref new_email) = req.email {
         diesel::update(users.find(&target_user_id))
-            .set(email.eq(new_email))
+            .set(email.eq(Some(new_email)))
             .execute(&mut conn)
             .map_err(|e| {
                 actix_web::error::ErrorInternalServerError(e.to_string())
@@ -1583,6 +1827,159 @@ pub async fn unshare_inventory(
             "Failed to unshare inventory",
         )
     })?;
+
+    Ok(HttpResponse::Ok().finish())
+}
+
+// --- Category Management Handlers ---
+
+#[actix_web::get("/api/inventories/{inventory_id}/categories")]
+pub async fn get_inventory_categories(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+) -> Result<HttpResponse> {
+    let inventory_id_param = path.into_inner();
+    let mut conn = pool.get().expect("Failed to get DB connection");
+
+    use crate::schema::inventory_categories::dsl::*;
+
+    let categories = inventory_categories
+        .filter(inventory_id.eq(inventory_id_param))
+        .load::<InventoryCategory>(&mut conn)
+        .map_err(|e| {
+            eprintln!("Error loading categories: {:?}", e);
+            actix_web::error::ErrorInternalServerError("Database error")
+        })?;
+
+    Ok(HttpResponse::Ok().json(categories))
+}
+
+#[derive(serde::Deserialize)]
+pub struct CreateCategoryRequest {
+    pub name: String,
+    pub parent_id: Option<String>,
+}
+
+#[actix_web::post("/api/inventories/{inventory_id}/categories")]
+pub async fn create_inventory_category(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+    req: web::Json<CreateCategoryRequest>,
+) -> Result<HttpResponse> {
+    let inventory_id_param = path.into_inner();
+    let mut conn = pool.get().expect("Failed to get DB connection");
+
+    let new_cat = NewInventoryCategory {
+        id: Uuid::new_v4().to_string(),
+        inventory_id: inventory_id_param,
+        name: req.name.clone(),
+        parent_id: req.parent_id.clone(),
+    };
+
+    diesel::insert_into(crate::schema::inventory_categories::table)
+        .values(&new_cat)
+        .execute(&mut conn)
+        .map_err(|e| {
+            eprintln!("Error creating category: {:?}", e);
+            actix_web::error::ErrorInternalServerError("Database error")
+        })?;
+
+    Ok(HttpResponse::Created().json(new_cat))
+}
+
+#[derive(serde::Deserialize)]
+pub struct UpdateCategoryRequest {
+    pub name: Option<String>,
+    pub parent_id: Option<Option<String>>, // Some(None) to clear parent, None to keep current
+}
+
+#[actix_web::put("/api/inventories/{inventory_id}/categories/{category_id}")]
+pub async fn update_inventory_category(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<(String, String)>,
+    req: web::Json<UpdateCategoryRequest>,
+) -> Result<HttpResponse> {
+    let (_inventory_id_param, category_id_param) = path.into_inner();
+    let mut conn = pool.get().expect("Failed to get DB connection");
+
+    use crate::schema::inventory_categories::dsl::*;
+
+    let mut update_count = 0;
+    if let Some(ref new_name) = req.name {
+        diesel::update(inventory_categories.find(&category_id_param))
+            .set(name.eq(new_name))
+            .execute(&mut conn)
+            .map_err(|e| {
+                eprintln!("Error updating category name: {:?}", e);
+                actix_web::error::ErrorInternalServerError("Database error")
+            })?;
+        update_count += 1;
+    }
+
+    if let Some(ref new_parent_id) = req.parent_id {
+        diesel::update(inventory_categories.find(&category_id_param))
+            .set(parent_id.eq(new_parent_id))
+            .execute(&mut conn)
+            .map_err(|e| {
+                eprintln!("Error updating category parent: {:?}", e);
+                actix_web::error::ErrorInternalServerError("Database error")
+            })?;
+        update_count += 1;
+    }
+
+    if update_count == 0 {
+        return Ok(HttpResponse::BadRequest()
+            .json(serde_json::json!({"error": "Nothing to update"})));
+    }
+
+    Ok(HttpResponse::Ok().finish())
+}
+
+#[actix_web::delete("/api/inventories/{inventory_id}/categories/{category_id}")]
+pub async fn delete_inventory_category(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<(String, String)>,
+) -> Result<HttpResponse> {
+    let (_inventory_id_param, category_id_param) = path.into_inner();
+    let mut conn = pool.get().expect("Failed to get DB connection");
+
+    // First, clear links in item_categories
+    {
+        use crate::schema::item_categories::dsl::*;
+        diesel::delete(
+            item_categories.filter(category_id.eq(&category_id_param)),
+        )
+        .execute(&mut conn)
+        .map_err(|e| {
+            eprintln!("Error clearing category links: {:?}", e);
+            actix_web::error::ErrorInternalServerError("Database error")
+        })?;
+    }
+
+    // Then, set parent_id to NULL for all children
+    {
+        use crate::schema::inventory_categories::dsl::*;
+        diesel::update(
+            inventory_categories.filter(parent_id.eq(&category_id_param)),
+        )
+        .set(parent_id.eq(None::<String>))
+        .execute(&mut conn)
+        .map_err(|e| {
+            eprintln!("Error updating child categories: {:?}", e);
+            actix_web::error::ErrorInternalServerError("Database error")
+        })?;
+    }
+
+    // Finally, delete the category
+    {
+        use crate::schema::inventory_categories::dsl::*;
+        diesel::delete(inventory_categories.find(&category_id_param))
+            .execute(&mut conn)
+            .map_err(|e| {
+                eprintln!("Error deleting category: {:?}", e);
+                actix_web::error::ErrorInternalServerError("Database error")
+            })?;
+    }
 
     Ok(HttpResponse::Ok().finish())
 }

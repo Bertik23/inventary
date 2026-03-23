@@ -1,7 +1,8 @@
 use crate::api::{
-    add_item, buffer_unknown_product, get_product_by_barcode, remove_item,
-    search_inventory_items, search_products, AddItemRequest,
-    BufferProductRequest, ProductInfo, RemoveItemRequest,
+    add_item, buffer_unknown_product, get_inventory_categories,
+    get_product_by_barcode, remove_item, search_inventory_items,
+    search_products, AddItemRequest, BufferProductRequest, InventoryCategory,
+    ProductInfo, RemoveItemRequest,
 };
 use crate::app::{InventoryContext, UserContext};
 use crate::barcode::BarcodeScanner as ScannerComponent;
@@ -48,18 +49,28 @@ pub fn barcode_scanner(props: &Props) -> Html {
     let unknown_name = use_state(|| String::new());
     let unknown_brand = use_state(|| String::new());
     let unknown_unit = use_state(|| "pcs".to_string());
+    let available_categories = use_state(|| Vec::<InventoryCategory>::new());
+    let selected_category_ids = use_state(|| Vec::<String>::new());
 
     {
         let templates = templates.clone();
         let inventory_id = inventory_id.clone();
+        let available_categories = available_categories.clone();
         use_effect_with(inventory_id, move |inventory_id| {
             let inventory_id = inventory_id.clone();
+            let inventory_id_for_cats = inventory_id.clone();
+            let available_categories = available_categories.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 match crate::api::get_custom_item_templates(Some(&inventory_id))
                     .await
                 {
                     Ok(t) => templates.set(t),
                     Err(e) => log::error!("Failed to fetch templates: {}", e),
+                }
+
+                match get_inventory_categories(&inventory_id_for_cats).await {
+                    Ok(cats) => available_categories.set(cats),
+                    Err(e) => log::error!("Failed to fetch categories: {}", e),
                 }
             });
         });
@@ -145,6 +156,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
         let mode = props.mode.clone();
         let inventory_id = inventory_id.clone();
         let i18n = i18n.clone();
+        let selected_category_ids = selected_category_ids.clone();
 
         Callback::from(move |_| {
             if let Some(ref product) = *selected {
@@ -152,8 +164,13 @@ pub fn barcode_scanner(props: &Props) -> Html {
                 let req_inventory_id = inventory_id.clone();
                 let barcode = product.barcode.clone();
                 let name = Some(product.name.clone());
-                let qty = Some(*quantity);
+                let qty = Some(*quantity as f32);
                 let unit = Some((*selected_unit).clone());
+                let cats = if (*selected_category_ids).is_empty() {
+                    None
+                } else {
+                    Some((*selected_category_ids).clone())
+                };
 
                 let loading = loading.clone();
                 let message = message.clone();
@@ -170,6 +187,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
                             name,
                             quantity: qty,
                             unit,
+                            categories: cats,
                         })
                         .await
                     } else {
@@ -260,8 +278,9 @@ pub fn barcode_scanner(props: &Props) -> Html {
                     inventory_id: inv_id,
                     barcode: Some(barcode),
                     name: Some(name),
-                    quantity: Some(1.0),
+                    quantity: Some(1.0 as f32),
                     unit: Some(unit),
+                    categories: None,
                 };
                 match add_item(add_req).await {
                     Ok(_) => {
@@ -604,6 +623,44 @@ pub fn barcode_scanner(props: &Props) -> Html {
                                                 }
                                             }}
                                         </div>
+
+                                        if !available_categories.is_empty() && props.mode == "add" {
+                                            <div class="space-y-2 mt-4">
+                                                <span class="text-gray-700 font-medium block">{i18n.t("Categories")}</span>
+                                                <div class="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 border border-gray-200 rounded-lg">
+                                                    {for available_categories.iter().map(|cat| {
+                                                        let cat_id = cat.id.clone();
+                                                        let selected_ids = selected_category_ids.clone();
+                                                        let is_selected = (*selected_ids).contains(&cat_id);
+                                                        let on_toggle = {
+                                                            let cat_id = cat_id.clone();
+                                                            let selected_ids = selected_ids.clone();
+                                                            Callback::from(move |_| {
+                                                                let mut current = (*selected_ids).clone();
+                                                                if current.contains(&cat_id) {
+                                                                    current.retain(|id| id != &cat_id);
+                                                                } else {
+                                                                    current.push(cat_id.clone());
+                                                                }
+                                                                selected_ids.set(current);
+                                                            })
+                                                        };
+                                                        html! {
+                                                            <button
+                                                                onclick={on_toggle}
+                                                                class={classes!(
+                                                                    "px-3", "py-1", "text-xs", "rounded-full", "border", "transition",
+                                                                    if is_selected { "bg-blue-600 text-white border-blue-600" } else { "bg-white text-gray-600 border-gray-200 hover:border-blue-300" }
+                                                                )}
+                                                            >
+                                                                {&cat.name}
+                                                            </button>
+                                                        }
+                                                    })}
+                                                </div>
+                                            </div>
+                                        }
+
                                         <button
                                             class={classes!(
                                                 "flex-1", "py-3", "px-4", "rounded-lg", "text-white", "font-medium", "transition", "shadow-sm",

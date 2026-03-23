@@ -167,10 +167,23 @@ pub fn inventory_selection(_props: &Props) -> Html {
                                 })
                             };
 
+                            let on_categories = {
+                                let navigator = navigator.clone();
+                                let id = id.clone();
+                                Callback::from(move |_| {
+                                    navigator.push(&Route::Categories { id: id.clone() });
+                                })
+                            };
+
                             html! {
                                 <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 transition flex justify-between items-center">
                                     <span class="font-medium text-gray-800">{&inv.name}</span>
                                     <div class="flex gap-2">
+                                        <button onclick={on_categories} class="px-2 py-1 bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200" title={i18n.t("Categories")}>
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" />
+                                            </svg>
+                                        </button>
                                         <button onclick={on_share} class="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">{i18n.t("inventory.share")}</button>
                                         <button onclick={on_select} class="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700">{i18n.t("inventory.switch")}</button>
                                     </div>

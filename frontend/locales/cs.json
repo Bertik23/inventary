@@ -3,6 +3,7 @@
         "back": "Zpět",
         "save": "Uložit",
         "delete": "Smazat",
+        "edit": "Upravit",
         "cancel": "Zrušit",
         "loading": "Načítání...",
         "error": "Chyba: {e}",
@@ -78,7 +79,22 @@
         "create_button": "Vytvořit",
         "switch": "Přepnout",
         "share": "Sdílet",
-        "owned_by": "Vlastník: {name}"
+        "owned_by": "Vlastník: {name}",
+        "uncategorized": "Nezařazeno",
+        "no_items_found": "Nebyly nalezeny žádné položky odpovídající filtru",
+        "edit_item": "Upravit položku"
+    },
+    "category": {
+        "title": "Kategorie",
+        "new_category": "Nová kategorie",
+        "name_placeholder": "Název nové kategorie",
+        "no_parent": "Bez nadřazené",
+        "add": "Přidat",
+        "name": "Název",
+        "parent": "Nadřazená",
+        "actions": "Akce",
+        "no_found": "Nebyly nalezeny žádné kategorie",
+        "all_items": "Všechny položky"
     },
     "share": {
         "title": "Sdílet inventář",

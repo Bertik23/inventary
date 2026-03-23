@@ -1,6 +1,6 @@
 use crate::api::{
-    get_inventory_users, share_inventory, unshare_inventory,
-    ShareInventoryRequest, SharedUser, UnshareInventoryRequest,
+    get_inventory_users, unshare_inventory, ShareInventoryRequest, SharedUser,
+    UnshareInventoryRequest,
 };
 use crate::i18n::use_i18n;
 use crate::router::Route;

@@ -1,17 +1,21 @@
 use crate::schema::{
-    custom_item_templates, inventories, inventory_items, inventory_users, users,
+    custom_item_templates, inventories, inventory_categories, inventory_items,
+    inventory_users, item_categories, users,
 };
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Queryable, Serialize, Deserialize, Clone)]
+#[derive(
+    Queryable, Serialize, Deserialize, Clone, Identifiable, Debug, PartialEq,
+)]
+#[diesel(table_name = inventory_items)]
 pub struct InventoryItem {
     pub id: String,
     pub inventory_id: String,
     pub barcode: Option<String>,
     pub name: String,
-    pub quantity: f64,
+    pub quantity: f32,
     pub unit: String,
     pub product_data: Option<String>,
     pub created_at: NaiveDateTime,
@@ -25,7 +29,7 @@ pub struct NewInventoryItem {
     pub inventory_id: String,
     pub barcode: Option<String>,
     pub name: String,
-    pub quantity: f64,
+    pub quantity: f32,
     pub unit: String,
     pub product_data: Option<String>,
 }
@@ -35,8 +39,61 @@ pub struct AddItemRequest {
     pub inventory_id: String,
     pub barcode: Option<String>,
     pub name: Option<String>,
-    pub quantity: Option<f64>,
+    pub quantity: Option<f32>,
     pub unit: Option<String>,
+    pub categories: Option<Vec<String>>, // Names or IDs
+}
+
+#[derive(Deserialize)]
+pub struct UpdateItemRequest {
+    pub name: Option<String>,
+    pub quantity: Option<f32>,
+    pub unit: Option<String>,
+    pub categories: Option<Vec<String>>, // Category IDs
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct InventoryItemResponse {
+    pub id: String,
+    pub inventory_id: String,
+    pub barcode: Option<String>,
+    pub name: String,
+    pub quantity: f32,
+    pub unit: String,
+    pub product_data: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub category_ids: Vec<String>,
+}
+
+// Category Models
+#[derive(
+    Queryable, Serialize, Deserialize, Clone, Identifiable, Debug, PartialEq,
+)]
+#[diesel(table_name = inventory_categories)]
+pub struct InventoryCategory {
+    pub id: String,
+    pub inventory_id: String,
+    pub name: String,
+    pub parent_id: Option<String>,
+}
+
+#[derive(Insertable, Deserialize, Serialize)]
+#[diesel(table_name = inventory_categories)]
+pub struct NewInventoryCategory {
+    pub id: String,
+    pub inventory_id: String,
+    pub name: String,
+    pub parent_id: Option<String>,
+}
+
+#[derive(
+    Queryable, Insertable, Serialize, Deserialize, Clone, Debug, PartialEq,
+)]
+#[diesel(table_name = item_categories)]
+pub struct ItemCategory {
+    pub item_id: String,
+    pub category_id: String,
 }
 
 #[derive(Deserialize)]
@@ -45,7 +102,7 @@ pub struct RemoveItemRequest {
     pub barcode: Option<String>,
     pub id: Option<String>,
     pub name: Option<String>,
-    pub quantity: Option<f64>,
+    pub quantity: Option<f32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -65,14 +122,11 @@ pub struct ProductInfo {
 pub struct User {
     pub id: String,
     pub username: String,
-    pub email: String,
-    #[serde(skip)]
     pub password_hash: String,
-    #[serde(skip)]
-    pub reset_token: Option<String>,
-    #[serde(skip)]
-    pub reset_token_expiry: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
+    pub email: Option<String>,
+    pub reset_token: Option<String>,
+    pub reset_token_expiry: Option<NaiveDateTime>,
     pub role: String,
 }
 
@@ -81,10 +135,20 @@ pub struct User {
 pub struct NewUser {
     pub id: String,
     pub username: String,
-    pub email: String,
     pub password_hash: String,
+    pub created_at: NaiveDateTime,
+    pub email: Option<String>,
     pub role: String,
 }
+
+#[derive(Queryable, Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct SharedUser {
+    pub id: String,
+    pub username: String,
+    pub email: Option<String>,
+    pub role: String,
+}
+
 #[derive(Deserialize)]
 pub struct ForgotPasswordRequest {
     pub email: String,
@@ -148,14 +212,6 @@ pub struct InventoryUser {
 pub struct NewInventoryUser {
     pub inventory_id: String,
     pub user_id: String,
-    pub role: String,
-}
-
-#[derive(Queryable, Serialize)]
-pub struct SharedUser {
-    pub id: String,
-    pub username: String,
-    pub email: String,
     pub role: String,
 }
 

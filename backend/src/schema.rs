@@ -30,12 +30,21 @@ diesel::table! {
 }
 
 diesel::table! {
+    inventory_categories (id) {
+        id -> Text,
+        inventory_id -> Text,
+        name -> Text,
+        parent_id -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
     inventory_items (id) {
         id -> Text,
         inventory_id -> Text,
         barcode -> Nullable<Text>,
         name -> Text,
-        quantity -> Double,
+        quantity -> Float,
         unit -> Text,
         product_data -> Nullable<Text>,
         created_at -> Timestamp,
@@ -48,6 +57,13 @@ diesel::table! {
         inventory_id -> Text,
         user_id -> Text,
         role -> Text,
+    }
+}
+
+diesel::table! {
+    item_categories (item_id, category_id) {
+        item_id -> Text,
+        category_id -> Text,
     }
 }
 
@@ -67,27 +83,32 @@ diesel::table! {
     users (id) {
         id -> Text,
         username -> Text,
-        email -> Text,
         password_hash -> Text,
+        created_at -> Timestamp,
+        email -> Nullable<Text>,
         reset_token -> Nullable<Text>,
         reset_token_expiry -> Nullable<Timestamp>,
-        created_at -> Timestamp,
         role -> Text,
     }
 }
 
 diesel::joinable!(inventories -> users (owner_id));
+diesel::joinable!(inventory_categories -> inventories (inventory_id));
 diesel::joinable!(inventory_items -> inventories (inventory_id));
 diesel::joinable!(inventory_users -> inventories (inventory_id));
 diesel::joinable!(inventory_users -> users (user_id));
+diesel::joinable!(item_categories -> inventory_categories (category_id));
+diesel::joinable!(item_categories -> inventory_items (item_id));
 diesel::joinable!(pending_products -> users (added_by));
 
 diesel::allow_tables_to_appear_in_same_query!(
     custom_item_templates,
     custom_products,
     inventories,
+    inventory_categories,
     inventory_items,
     inventory_users,
+    item_categories,
     pending_products,
     users,
 );

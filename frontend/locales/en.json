@@ -3,6 +3,7 @@
         "back": "Back",
         "save": "Save",
         "delete": "Delete",
+        "edit": "Edit",
         "cancel": "Cancel",
         "loading": "Loading...",
         "error": "Error: {e}",
@@ -78,7 +79,22 @@
         "create_button": "Create",
         "switch": "Switch",
         "share": "Share",
-        "owned_by": "Owned by {name}"
+        "owned_by": "Owned by {name}",
+        "uncategorized": "Uncategorized",
+        "no_items_found": "No items found matching the filter",
+        "edit_item": "Edit Item"
+    },
+    "category": {
+        "title": "Categories",
+        "new_category": "New Category",
+        "name_placeholder": "New Category Name",
+        "no_parent": "No Parent",
+        "add": "Add",
+        "name": "Name",
+        "parent": "Parent",
+        "actions": "Actions",
+        "no_found": "No categories found",
+        "all_items": "All Items"
     },
     "share": {
         "title": "Share Inventory",

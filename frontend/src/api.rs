@@ -37,11 +37,13 @@ pub struct InventoryItem {
     pub inventory_id: String,
     pub barcode: Option<String>,
     pub name: String,
-    pub quantity: f64,
+    pub quantity: f32,
     pub unit: String,
     pub product_data: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(default)]
+    pub category_ids: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -49,8 +51,17 @@ pub struct AddItemRequest {
     pub inventory_id: String,
     pub barcode: Option<String>,
     pub name: Option<String>,
-    pub quantity: Option<f64>,
+    pub quantity: Option<f32>,
     pub unit: Option<String>,
+    pub categories: Option<Vec<String>>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct UpdateItemRequest {
+    pub name: Option<String>,
+    pub quantity: Option<f32>,
+    pub unit: Option<String>,
+    pub categories: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -59,7 +70,7 @@ pub struct RemoveItemRequest {
     pub barcode: Option<String>,
     pub id: Option<String>,
     pub name: Option<String>,
-    pub quantity: Option<f64>,
+    pub quantity: Option<f32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -91,6 +102,26 @@ pub struct ProductInfo {
     pub brand: Option<String>,
     pub categories: Vec<String>,
     pub unit: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct InventoryCategory {
+    pub id: String,
+    pub inventory_id: String,
+    pub name: String,
+    pub parent_id: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CreateCategoryRequest {
+    pub name: String,
+    pub parent_id: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct UpdateCategoryRequest {
+    pub name: Option<String>,
+    pub parent_id: Option<Option<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -155,6 +186,14 @@ pub async fn fetch_inventory(
 pub async fn add_item(req: AddItemRequest) -> Result<InventoryItem, String> {
     let url = format!("{}/inventory/add", get_api_base());
     fetch_json(&url, Some(&req)).await
+}
+
+pub async fn update_item(
+    item_id: &str,
+    req: UpdateItemRequest,
+) -> Result<InventoryItem, String> {
+    let url = format!("{}/inventory/items/{}", get_api_base(), item_id);
+    fetch_put_json(&url, Some(&req)).await
 }
 
 pub async fn remove_item(
@@ -510,6 +549,50 @@ pub struct UnshareInventoryRequest {
     pub user_id: String,
 }
 
+pub async fn get_inventory_categories(
+    inventory_id: &str,
+) -> Result<Vec<InventoryCategory>, String> {
+    let url =
+        format!("{}/inventories/{}/categories", get_api_base(), inventory_id);
+    fetch_json(&url, None::<&()>).await
+}
+
+pub async fn create_inventory_category(
+    inventory_id: &str,
+    req: CreateCategoryRequest,
+) -> Result<InventoryCategory, String> {
+    let url =
+        format!("{}/inventories/{}/categories", get_api_base(), inventory_id);
+    fetch_json(&url, Some(&req)).await
+}
+
+pub async fn update_inventory_category(
+    inventory_id: &str,
+    category_id: &str,
+    req: UpdateCategoryRequest,
+) -> Result<(), String> {
+    let url = format!(
+        "{}/inventories/{}/categories/{}",
+        get_api_base(),
+        inventory_id,
+        category_id
+    );
+    fetch_put(&url, Some(&req)).await
+}
+
+pub async fn delete_inventory_category(
+    inventory_id: &str,
+    category_id: &str,
+) -> Result<(), String> {
+    let url = format!(
+        "{}/inventories/{}/categories/{}",
+        get_api_base(),
+        inventory_id,
+        category_id
+    );
+    fetch_delete(&url, None::<&()>).await
+}
+
 pub async fn get_inventory_users(
     inventory_id: &str,
 ) -> Result<Vec<SharedUser>, String> {
@@ -538,7 +621,7 @@ async fn fetch_method<T: Serialize>(
     method: &str,
     body: Option<&T>,
 ) -> Result<(), String> {
-    let mut opts = RequestInit::new();
+    let opts = RequestInit::new();
     opts.set_method(method);
     opts.set_mode(RequestMode::Cors);
 
@@ -618,7 +701,7 @@ async fn fetch_json_with_method<T: Serialize, R: for<'de> Deserialize<'de>>(
     method: &str,
     body: Option<&T>,
 ) -> Result<R, String> {
-    let mut opts = RequestInit::new();
+    let opts = RequestInit::new();
     opts.set_method(method);
     opts.set_mode(RequestMode::Cors);
 

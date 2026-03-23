@@ -66,7 +66,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
                     )
                     .unwrap();
 
-                    let mut constraints = MediaStreamConstraints::new();
+                    let constraints = MediaStreamConstraints::new();
                     constraints.set_video(&JsValue::from(&video_constraints));
 
                     match media_devices

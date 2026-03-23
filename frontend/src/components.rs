@@ -1,5 +1,6 @@
 pub mod admin;
 pub mod barcode_scanner;
+pub mod category_manager;
 pub mod custom_item_manager;
 pub mod inventory_list;
 pub mod inventory_selection;

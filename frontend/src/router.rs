@@ -21,6 +21,8 @@ pub enum Route {
     Share { id: String },
     #[at("/inventories/:id/custom-items")]
     CustomItems { id: String },
+    #[at("/inventories/:id/categories")]
+    Categories { id: String },
     #[at("/profile")]
     Profile,
     #[at("/admin")]
@@ -51,6 +53,9 @@ pub fn switch(routes: Route) -> Html {
         }
         Route::CustomItems { id } => {
             html! { <crate::components::custom_item_manager::CustomItemManager inventory_id={id} /> }
+        }
+        Route::Categories { id } => {
+            html! { <crate::components::category_manager::CategoryManager inventory_id={id} /> }
         }
         Route::Profile => {
             html! { <crate::components::profile::Profile /> }
