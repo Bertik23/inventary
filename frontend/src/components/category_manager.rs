@@ -221,12 +221,14 @@ pub fn category_manager(props: &Props) -> Html {
                                     <td class="p-4">
                                         <select
                                             class="text-sm px-2 py-1 border border-gray-200 rounded outline-none focus:ring-2 focus:ring-blue-500 bg-transparent"
-                                            value={ cat.parent_id.clone().unwrap_or_default() }
                                             onchange={ on_update_parent(cat.id.clone()) }
                                         >
-                                            <option value="">{ i18n.t("category.no_parent") }</option>
-                                            { for categories.iter().filter(|c| c.id != cat.id).map(|c| html! {
-                                                <option value={c.id.clone()}>{ &c.name }</option>
+                                            <option value="" selected={ cat.parent_id.is_none() }>{ i18n.t("category.no_parent") }</option>
+                                            { for categories.iter().filter(|c| c.id != cat.id).map(|c| {
+                                                let is_selected = cat.parent_id.as_ref() == Some(&c.id);
+                                                html! {
+                                                    <option value={c.id.clone()} selected={is_selected}>{ &c.name }</option>
+                                                }
                                             }) }
                                         </select>
                                     </td>

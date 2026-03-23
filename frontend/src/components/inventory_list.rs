@@ -24,6 +24,7 @@ pub fn inventory_list(_props: &Props) -> Html {
 
     // Filter state
     let selected_category_id = use_state(|| None::<String>);
+    let filter_expanded = use_state(|| false);
 
     // Editor state
     let editing_item = use_state(|| None::<InventoryItem>);
@@ -176,52 +177,60 @@ pub fn inventory_list(_props: &Props) -> Html {
     };
 
     // Helper to render hierarchical filter options
-    fn render_filter_options(
+    fn render_filter_tree(
         cats: &[InventoryCategory],
         parent_id: Option<&str>,
-        depth: usize,
         selected_id: &Option<String>,
         on_select: Callback<Option<String>>,
-    ) -> Vec<Html> {
-        let mut options = Vec::new();
+    ) -> Html {
         let level_cats: Vec<_> = cats
             .iter()
             .filter(|c| c.parent_id.as_deref() == parent_id)
             .collect();
 
-        for cat in level_cats {
-            let id = cat.id.clone();
-            let name = cat.name.clone();
-            let is_selected = selected_id.as_ref() == Some(&id);
-            let on_click = {
-                let id = id.clone();
-                let on_select = on_select.clone();
-                Callback::from(move |_| on_select.emit(Some(id.clone())))
-            };
-
-            options.push(html! {
-                <button
-                    onclick={on_click}
-                    class={classes!(
-                        "px-3", "py-1.5", "text-sm", "rounded-full", "border", "transition-all", "whitespace-nowrap",
-                        if is_selected { "bg-blue-600 text-white border-blue-600 shadow-sm scale-105" }
-                        else { "bg-white text-gray-600 border-gray-200 hover:border-blue-300" }
-                    )}
-                    style={format!("margin-left: {}px", depth * 8)}
-                >
-                    { name }
-                </button>
-            });
-
-            options.extend(render_filter_options(
-                cats,
-                Some(&id),
-                depth + 1,
-                selected_id,
-                on_select.clone(),
-            ));
+        if level_cats.is_empty() {
+            return html! {};
         }
-        options
+
+        html! {
+            <div class="flex flex-col gap-1 ml-4 mt-1 border-l border-gray-100 pl-2">
+                { for level_cats.iter().map(|cat| {
+                    let id = cat.id.clone();
+                    let name = cat.name.clone();
+                    let is_selected = selected_id.as_ref() == Some(&id);
+                    let on_click = {
+                        let id = id.clone();
+                        let on_select = on_select.clone();
+                        Callback::from(move |_| on_select.emit(Some(id.clone())))
+                    };
+
+                    let has_children = cats.iter().any(|c| c.parent_id.as_deref() == Some(&id));
+
+                    html! {
+                        <div class="flex flex-col">
+                            <button
+                                onclick={on_click}
+                                class={classes!(
+                                    "text-left", "px-3", "py-1.5", "text-sm", "rounded-lg", "transition-all", "flex", "items-center", "gap-2",
+                                    if is_selected { "bg-blue-50 text-blue-700 font-semibold" }
+                                    else { "text-gray-600 hover:bg-gray-50" }
+                                )}
+                            >
+                                if has_children {
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                    </svg>
+                                } else {
+                                    <div class="w-3"></div>
+                                }
+                                { name }
+                            </button>
+                            { render_filter_tree(cats, Some(&id), selected_id, on_select.clone()) }
+                        </div>
+                    }
+                }) }
+            </div>
+        }
     }
 
     let render_item_editor = {
@@ -265,41 +274,80 @@ pub fn inventory_list(_props: &Props) -> Html {
             } else {
                 <>
                     // Category Filter UI
-                    <div class="mb-8 overflow-x-auto pb-4 no-scrollbar">
-                        <div class="flex gap-2 min-w-max px-1">
-                            <button
-                                onclick={
-                                    let on_select = selected_category_id.clone();
-                                    Callback::from(move |_| on_select.set(None))
-                                }
-                                class={classes!(
-                                    "px-4", "py-1.5", "text-sm", "font-medium", "rounded-full", "border", "transition-all",
-                                    if selected_category_id.is_none() { "bg-gray-800 text-white border-gray-800 shadow-md scale-105" }
-                                    else { "bg-white text-gray-600 border-gray-200 hover:border-gray-300" }
-                                )}
-                            >
-                                { i18n.t("category.all_items") }
-                            </button>
+                    <div class="mb-6 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                        <button
+                            onclick={let filter_expanded = filter_expanded.clone(); move |_| filter_expanded.set(!*filter_expanded)}
+                            class="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-50 transition-colors"
+                        >
+                            <div class="flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="font-medium text-gray-700">
+                                    if let Some(id) = &*selected_category_id {
+                                        if id == "uncategorized" {
+                                            { i18n.t("inventory.uncategorized") }
+                                        } else {
+                                            { cat_map.get(id).map(|c| c.name.as_str()).unwrap_or("") }
+                                        }
+                                    } else {
+                                        { i18n.t("category.all_items") }
+                                    }
+                                </span>
+                            </div>
+                            <svg xmlns="http://www.w3.org/2000/svg" class={classes!("h-5", "w-5", "text-gray-400", "transition-transform", if *filter_expanded { "rotate-180" } else { "" })} viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
 
-                            { for render_filter_options(&categories, None, 0, &selected_category_id, {
-                                let selected_category_id = selected_category_id.clone();
-                                Callback::from(move |id| selected_category_id.set(id))
-                            }) }
+                        if *filter_expanded {
+                            <div class="px-2 pb-4 pt-1 border-t border-gray-50 max-h-80 overflow-y-auto animate-fade-in">
+                                <button
+                                    onclick={
+                                        let on_select = selected_category_id.clone();
+                                        let filter_expanded = filter_expanded.clone();
+                                        Callback::from(move |_| {
+                                            on_select.set(None);
+                                            filter_expanded.set(false);
+                                        })
+                                    }
+                                    class={classes!(
+                                        "w-full", "text-left", "px-3", "py-2", "text-sm", "font-medium", "rounded-lg", "transition-all",
+                                        if selected_category_id.is_none() { "bg-blue-50 text-blue-700" }
+                                        else { "text-gray-600 hover:bg-gray-50" }
+                                    )}
+                                >
+                                    { i18n.t("category.all_items") }
+                                </button>
 
-                            <button
-                                onclick={
-                                    let on_select = selected_category_id.clone();
-                                    Callback::from(move |_| on_select.set(Some("uncategorized".to_string())))
-                                }
-                                class={classes!(
-                                    "px-4", "py-1.5", "text-sm", "font-medium", "rounded-full", "border", "transition-all",
-                                    if *selected_category_id == Some("uncategorized".to_string()) { "bg-gray-500 text-white border-gray-500 shadow-md scale-105" }
-                                    else { "bg-white text-gray-400 border-gray-200 border-dashed hover:border-gray-300" }
-                                )}
-                            >
-                                { i18n.t("inventory.uncategorized") }
-                            </button>
-                        </div>
+                                { render_filter_tree(&categories, None, &selected_category_id, {
+                                    let selected_category_id = selected_category_id.clone();
+                                    let filter_expanded = filter_expanded.clone();
+                                    Callback::from(move |id| {
+                                        selected_category_id.set(id);
+                                        filter_expanded.set(false);
+                                    })
+                                }) }
+
+                                <button
+                                    onclick={
+                                        let on_select = selected_category_id.clone();
+                                        let filter_expanded = filter_expanded.clone();
+                                        Callback::from(move |_| {
+                                            on_select.set(Some("uncategorized".to_string()));
+                                            filter_expanded.set(false);
+                                        })
+                                    }
+                                    class={classes!(
+                                        "w-full", "text-left", "px-3", "py-2", "text-sm", "font-medium", "rounded-lg", "transition-all", "mt-1",
+                                        if *selected_category_id == Some("uncategorized".to_string()) { "bg-blue-50 text-blue-700" }
+                                        else { "text-gray-600 hover:bg-gray-50" }
+                                    )}
+                                >
+                                    { i18n.t("inventory.uncategorized") }
+                                </button>
+                            </div>
+                        }
                     </div>
 
                     // Items List
@@ -429,17 +477,16 @@ fn item_editor(props: &EditorProps) -> Html {
                             <label class="text-sm font-medium text-gray-700">{ i18n.t("common.unit") }</label>
                             <select
                                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                                value={ (*unit).clone() }
                                 onchange={let unit = unit.clone(); Callback::from(move |e: Event| {
                                     let input: web_sys::HtmlSelectElement = e.target_unchecked_into();
                                     unit.set(input.value());
                                 })}
                             >
-                                <option value="pcs">{ i18n.t("custom_items.unit_pcs") }</option>
-                                <option value="kg">{ i18n.t("custom_items.unit_kg") }</option>
-                                <option value="g">{ i18n.t("custom_items.unit_g") }</option>
-                                <option value="l">{ i18n.t("custom_items.unit_l") }</option>
-                                <option value="ml">{ i18n.t("custom_items.unit_ml") }</option>
+                                <option value="pcs" selected={*unit == "pcs"}>{ i18n.t("custom_items.unit_pcs") }</option>
+                                <option value="kg" selected={*unit == "kg"}>{ i18n.t("custom_items.unit_kg") }</option>
+                                <option value="g" selected={*unit == "g"}>{ i18n.t("custom_items.unit_g") }</option>
+                                <option value="l" selected={*unit == "l"}>{ i18n.t("custom_items.unit_l") }</option>
+                                <option value="ml" selected={*unit == "ml"}>{ i18n.t("custom_items.unit_ml") }</option>
                             </select>
                         </div>
                     </div>

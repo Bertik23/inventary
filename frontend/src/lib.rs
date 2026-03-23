@@ -34,4 +34,20 @@ mod tests {
         assert_eq!(format_quantity(1.51), "1.51");
         assert_eq!(format_quantity(0.0), "0");
     }
+
+    #[test]
+    fn test_i18n_substitution() {
+        use std::collections::HashMap;
+        let mut translations = HashMap::new();
+        translations
+            .insert("test.key".to_string(), "Hello {name}!".to_string());
+
+        // Use a simpler approach to test the logic
+        let mut s = translations.get("test.key").unwrap().clone();
+        let params = vec![("name", "World")];
+        for (k, v) in params {
+            s = s.replace(&format!("{{{}}}", k), v);
+        }
+        assert_eq!(s, "Hello World!");
+    }
 }

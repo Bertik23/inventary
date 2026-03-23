@@ -117,7 +117,9 @@ pub struct ProductInfo {
 }
 
 // User Models
-#[derive(Queryable, Serialize, Identifiable, Debug, Clone, PartialEq)]
+#[derive(
+    Queryable, Serialize, Deserialize, Identifiable, Debug, Clone, PartialEq,
+)]
 #[diesel(table_name = users)]
 pub struct User {
     pub id: String,

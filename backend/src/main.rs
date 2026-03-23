@@ -64,7 +64,7 @@ async fn main() -> std::io::Result<()> {
                 .service(handlers::add_item)
                 .service(handlers::remove_item)
                 .service(handlers::update_item)
-                .service(handlers::get_inventory_categories)
+                .service(handlers::show_inventory)
                 .service(handlers::search_inventory)
                 .service(handlers::search_product)
                 .service(handlers::get_item_by_barcode)
