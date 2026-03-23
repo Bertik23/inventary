@@ -282,8 +282,9 @@ pub fn main_menu(_props: &Props) -> Html {
                     </button>
                 </div>
 
-                <div class="text-center pt-8">
+                <div class="text-center pt-8 space-y-1">
                     <p class="text-xs text-gray-400">{i18n.t_with("common.copyright", vec![("year", "2026")])}</p>
+                    <p class="text-[10px] text-gray-300 font-mono">{"v"}{env!("CARGO_PKG_VERSION")}</p>
                 </div>
             </div>
         </div>
