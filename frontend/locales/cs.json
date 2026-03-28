@@ -83,7 +83,10 @@
         "owned_by": "Vlastník: {name}",
         "uncategorized": "Nezařazeno",
         "no_items_found": "Nebyly nalezeny žádné položky odpovídající filtru",
-        "edit_item": "Upravit položku"
+        "edit_item": "Upravit položku",
+        "edit_title": "Upravit inventář",
+        "name_label": "Název inventáře",
+        "category_language": "Jazyk kategorií (OpenFoodFacts)"
     },
     "category": {
         "title": "Kategorie",

@@ -1,0 +1,2 @@
+-- No easy way to drop a column in older SQLite, skipping for now
+-- ALTER TABLE inventories DROP COLUMN category_language;

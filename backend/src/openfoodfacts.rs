@@ -26,9 +26,13 @@ fn create_client() -> reqwest::Client {
 /// Documentation: https://openfoodfacts.github.io/openfoodfacts-server/api/
 pub async fn get_product_by_barcode(
     barcode: &str,
+    language: Option<&str>,
 ) -> Result<ProductInfo, Box<dyn std::error::Error>> {
-    let url =
-        format!("{}/api/v2/product/{}.json", OPENFOODFACTS_API_BASE, barcode);
+    let lang = language.unwrap_or("en");
+    let url = format!(
+        "{}/api/v2/product/{}.json?lc={}",
+        OPENFOODFACTS_API_BASE, barcode, lang
+    );
     let client = create_client();
     let response = client.get(&url).send().await?;
 
@@ -45,9 +49,11 @@ pub async fn get_product_by_barcode(
 
     let product = &json["product"];
 
-    // Get product name (prefer product_name, fallback to product_name_en)
-    let name = product["product_name"]
+    // Get product name (prefer translated, fallback to product_name, then others)
+    let lang_key = format!("product_name_{}", lang);
+    let name = product[&lang_key]
         .as_str()
+        .or_else(|| product["product_name"].as_str())
         .or_else(|| product["product_name_en"].as_str())
         .or_else(|| product["product_name_fr"].as_str())
         .unwrap_or("Unknown Product")
@@ -72,22 +78,66 @@ pub async fn get_product_by_barcode(
         })
         .map(|s| s.to_string());
 
-    // Get categories (can be string or array)
-    let categories = if let Some(cats_str) = product["categories"].as_str() {
-        cats_str
-            .split(',')
-            .map(|cat| cat.trim().to_string())
-            .filter(|cat| !cat.is_empty())
-            .collect()
-    } else if let Some(cats_array) = product["categories_tags"].as_array() {
-        cats_array
+    // Get categories (standardized tags are preferred for localization)
+    let lang_prefix = format!("{}:", lang);
+    let mut categories = Vec::new();
+
+    if let Some(cats_array) = product["categories_tags"].as_array() {
+        // 1. Try to find tags in the requested language
+        let mut lang_cats: Vec<String> = cats_array
             .iter()
             .filter_map(|v| v.as_str())
-            .map(|s| s.replace("en:", "").replace("fr:", ""))
-            .collect()
-    } else {
-        Vec::new()
-    };
+            .filter(|s| s.starts_with(&lang_prefix))
+            .map(|s| {
+                let name = s.replace(&lang_prefix, "").replace('-', " ");
+                // Title case
+                let mut c = name.chars();
+                match c.next() {
+                    None => String::new(),
+                    Some(f) => {
+                        f.to_uppercase().collect::<String>() + c.as_str()
+                    }
+                }
+            })
+            .collect();
+
+        if !lang_cats.is_empty() {
+            categories = lang_cats;
+        } else {
+            // 2. Fallback to all standardized tags (cleaning them up)
+            categories = cats_array
+                .iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| {
+                    let name = if s.contains(':') {
+                        s.split(':').nth(1).unwrap_or(s)
+                    } else {
+                        s
+                    }
+                    .replace('-', " ");
+
+                    let mut c = name.chars();
+                    match c.next() {
+                        None => String::new(),
+                        Some(f) => {
+                            f.to_uppercase().collect::<String>() + c.as_str()
+                        }
+                    }
+                })
+                .collect();
+        }
+    }
+
+    // 3. Last fallback to raw categories string if no tags found
+    if categories.is_empty() {
+        if let Some(cats_str) = product["categories"].as_str() {
+            categories = cats_str
+                .split(',')
+                .map(|cat| cat.trim().to_string())
+                .filter(|cat| !cat.is_empty())
+                .collect();
+        }
+    }
 
     Ok(ProductInfo {
         id: None,
@@ -105,12 +155,15 @@ pub async fn get_product_by_barcode(
 /// Note: Rate limit is 10 requests per minute for search queries
 pub async fn search_products(
     query: &str,
+    language: Option<&str>,
 ) -> Result<Vec<ProductInfo>, Box<dyn std::error::Error>> {
+    let lang = language.unwrap_or("en");
     // Use the /cgi/search.pl endpoint which is the standard for text search
     let url = format!(
-        "{}/cgi/search.pl?search_terms={}&search_simple=1&action=process&json=1&page_size=20",
+        "{}/cgi/search.pl?search_terms={}&search_simple=1&action=process&json=1&page_size=20&lc={}",
         OPENFOODFACTS_API_BASE,
-        urlencoding::encode(query)
+        urlencoding::encode(query),
+        lang
     );
 
     let client = create_client();
@@ -127,8 +180,10 @@ pub async fn search_products(
     let mut results = Vec::new();
     for product in products {
         // Get product name
-        let name = product["product_name"]
+        let lang_key = format!("product_name_{}", lang);
+        let name = product[&lang_key]
             .as_str()
+            .or_else(|| product["product_name"].as_str())
             .or_else(|| product["product_name_en"].as_str())
             .or_else(|| product["product_name_fr"].as_str())
             .unwrap_or("Unknown Product")
@@ -164,23 +219,67 @@ pub async fn search_products(
             })
             .map(|s| s.to_string());
 
-        // Get categories
-        let categories = if let Some(cats_str) = product["categories"].as_str()
-        {
-            cats_str
-                .split(',')
-                .map(|cat| cat.trim().to_string())
-                .filter(|cat| !cat.is_empty())
-                .collect()
-        } else if let Some(cats_array) = product["categories_tags"].as_array() {
-            cats_array
+        // Get categories (standardized tags are preferred for localization)
+        let lang_prefix = format!("{}:", lang);
+        let mut categories = Vec::new();
+
+        if let Some(cats_array) = product["categories_tags"].as_array() {
+            // 1. Try to find tags in the requested language
+            let mut lang_cats: Vec<String> = cats_array
                 .iter()
                 .filter_map(|v| v.as_str())
-                .map(|s| s.replace("en:", "").replace("fr:", ""))
-                .collect()
-        } else {
-            Vec::new()
-        };
+                .filter(|s| s.starts_with(&lang_prefix))
+                .map(|s| {
+                    let name = s.replace(&lang_prefix, "").replace('-', " ");
+                    // Title case
+                    let mut c = name.chars();
+                    match c.next() {
+                        None => String::new(),
+                        Some(f) => {
+                            f.to_uppercase().collect::<String>() + c.as_str()
+                        }
+                    }
+                })
+                .collect();
+
+            if !lang_cats.is_empty() {
+                categories = lang_cats;
+            } else {
+                // 2. Fallback to all standardized tags (cleaning them up)
+                categories = cats_array
+                    .iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| {
+                        let name = if s.contains(':') {
+                            s.split(':').nth(1).unwrap_or(s)
+                        } else {
+                            s
+                        }
+                        .replace('-', " ");
+
+                        let mut c = name.chars();
+                        match c.next() {
+                            None => String::new(),
+                            Some(f) => {
+                                f.to_uppercase().collect::<String>()
+                                    + c.as_str()
+                            }
+                        }
+                    })
+                    .collect();
+            }
+        }
+
+        // 3. Last fallback to raw categories string if no tags found
+        if categories.is_empty() {
+            if let Some(cats_str) = product["categories"].as_str() {
+                categories = cats_str
+                    .split(',')
+                    .map(|cat| cat.trim().to_string())
+                    .filter(|cat| !cat.is_empty())
+                    .collect();
+            }
+        }
 
         results.push(ProductInfo {
             id: None,

@@ -87,6 +87,7 @@ async fn main() -> std::io::Result<()> {
                 .service(handlers::update_custom_product)
                 .service(handlers::delete_custom_product)
                 .service(handlers::create_inventory)
+                .service(handlers::update_inventory)
                 .service(handlers::get_user_inventories)
                 .service(handlers::share_inventory)
                 .service(handlers::get_inventory_users)

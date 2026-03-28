@@ -26,6 +26,7 @@ diesel::table! {
         name -> Text,
         owner_id -> Text,
         created_at -> Timestamp,
+        category_language -> Text,
     }
 }
 

@@ -117,8 +117,20 @@ pub async fn add_item(
 ) -> Result<HttpResponse> {
     let mut conn = pool.get().expect("Failed to get DB connection");
 
+    use crate::schema::inventories::dsl::*;
+    let lang = inventories
+        .find(&req.inventory_id)
+        .select(category_language)
+        .first::<String>(&mut conn)
+        .ok();
+
     let product_info = if let Some(ref barcode_val) = req.barcode {
-        match openfoodfacts::get_product_by_barcode(barcode_val).await {
+        match openfoodfacts::get_product_by_barcode(
+            barcode_val,
+            lang.as_deref(),
+        )
+        .await
+        {
             Ok(info) => Some(info),
             Err(_) => None,
         }
@@ -705,15 +717,27 @@ pub async fn search_product(
 
     let mut conn = pool.get().expect("Failed to get DB connection");
 
+    let mut lang = None;
+    if let Some(inventory_id_param) = inv_id {
+        use crate::schema::inventories::dsl::*;
+        lang = inventories
+            .find(inventory_id_param)
+            .select(category_language)
+            .first::<String>(&mut conn)
+            .ok();
+    }
+
     // 1. Search OpenFoodFacts
-    let mut products = match openfoodfacts::search_products(search_query).await
-    {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("Search error: {:?}", e);
-            vec![]
-        }
-    };
+    let mut products =
+        match openfoodfacts::search_products(search_query, lang.as_deref())
+            .await
+        {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("Search error: {:?}", e);
+                vec![]
+            }
+        };
 
     // 2. If inventory_id provided, enrich products with existing config/unit
     if let Some(inventory_id_param) = inv_id {
@@ -764,13 +788,27 @@ pub async fn get_item_by_barcode(
     let barcode_val = path.into_inner();
     let inv_id = query.get("inventory_id");
 
-    let mut product =
-        match openfoodfacts::get_product_by_barcode(&barcode_val).await {
-            Ok(p) => Some(p),
-            Err(_) => None,
-        };
-
     let mut conn = pool.get().expect("Failed to get DB connection");
+
+    let mut lang = None;
+    if let Some(inventory_id_param) = inv_id {
+        use crate::schema::inventories::dsl::*;
+        lang = inventories
+            .find(inventory_id_param)
+            .select(category_language)
+            .first::<String>(&mut conn)
+            .ok();
+    }
+
+    let mut product = match openfoodfacts::get_product_by_barcode(
+        &barcode_val,
+        lang.as_deref(),
+    )
+    .await
+    {
+        Ok(p) => Some(p),
+        Err(_) => None,
+    };
 
     if product.is_none() {
         // Fallback 1: Check custom_products
@@ -928,6 +966,7 @@ pub async fn register_user(
 pub struct CreateInventoryRequest {
     pub name: String,
     pub owner_id: String, // In real app, get this from auth token
+    pub category_language: Option<String>,
 }
 
 #[actix_web::post("/api/inventories")]
@@ -941,6 +980,10 @@ pub async fn create_inventory(
         id: Uuid::new_v4().to_string(),
         name: req.name.clone(),
         owner_id: req.owner_id.clone(),
+        category_language: req
+            .category_language
+            .clone()
+            .unwrap_or_else(|| "en".to_string()),
     };
 
     diesel::insert_into(crate::schema::inventories::table)
@@ -965,6 +1008,52 @@ pub async fn create_inventory(
         })?;
 
     Ok(HttpResponse::Created().json(new_inv))
+}
+
+#[derive(serde::Deserialize)]
+pub struct UpdateInventoryRequest {
+    pub name: Option<String>,
+    pub category_language: Option<String>,
+}
+
+#[actix_web::put("/api/inventories/{inventory_id}")]
+pub async fn update_inventory(
+    pool: web::Data<r2d2::Pool<ConnectionManager<diesel::SqliteConnection>>>,
+    path: web::Path<String>,
+    req: web::Json<UpdateInventoryRequest>,
+) -> Result<HttpResponse> {
+    let inv_id = path.into_inner();
+    let mut conn = pool.get().expect("Failed to get DB connection");
+
+    use crate::schema::inventories::dsl::*;
+
+    let mut update_count = 0;
+
+    if let Some(new_name) = &req.name {
+        diesel::update(inventories.find(&inv_id))
+            .set(name.eq(new_name))
+            .execute(&mut conn)
+            .map_err(|e| {
+                actix_web::error::ErrorInternalServerError(e.to_string())
+            })?;
+        update_count += 1;
+    }
+
+    if let Some(new_lang) = &req.category_language {
+        diesel::update(inventories.find(&inv_id))
+            .set(category_language.eq(new_lang))
+            .execute(&mut conn)
+            .map_err(|e| {
+                actix_web::error::ErrorInternalServerError(e.to_string())
+            })?;
+        update_count += 1;
+    }
+
+    if update_count == 0 {
+        return Ok(HttpResponse::BadRequest().body("Nothing to update"));
+    }
+
+    Ok(HttpResponse::Ok().finish())
 }
 
 #[derive(Deserialize)]

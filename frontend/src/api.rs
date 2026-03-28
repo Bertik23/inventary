@@ -137,6 +137,7 @@ pub struct Inventory {
     pub id: String,
     pub name: String,
     pub owner_id: String,
+    pub category_language: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -173,6 +174,21 @@ pub struct ChangePasswordRequest {
 pub struct CreateInventoryRequest {
     pub name: String,
     pub owner_id: String,
+    pub category_language: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct UpdateInventoryRequest {
+    pub name: Option<String>,
+    pub category_language: Option<String>,
+}
+
+pub async fn update_inventory(
+    inventory_id: &str,
+    req: UpdateInventoryRequest,
+) -> Result<(), String> {
+    let url = format!("{}/inventories/{}", get_api_base(), inventory_id);
+    fetch_put(&url, Some(&req)).await
 }
 
 pub async fn fetch_inventory(

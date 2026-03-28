@@ -83,7 +83,10 @@
         "owned_by": "Owned by {name}",
         "uncategorized": "Uncategorized",
         "no_items_found": "No items found matching the filter",
-        "edit_item": "Edit Item"
+        "edit_item": "Edit Item",
+        "edit_title": "Edit Inventory",
+        "name_label": "Inventory Name",
+        "category_language": "Category Language (OpenFoodFacts)"
     },
     "category": {
         "title": "Categories",

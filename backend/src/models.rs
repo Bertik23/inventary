@@ -192,6 +192,7 @@ pub struct Inventory {
     pub name: String,
     pub owner_id: String,
     pub created_at: NaiveDateTime,
+    pub category_language: String,
 }
 
 #[derive(Insertable, Deserialize, Serialize)]
@@ -200,6 +201,7 @@ pub struct NewInventory {
     pub id: String,
     pub name: String,
     pub owner_id: String,
+    pub category_language: String,
 }
 
 #[derive(Queryable, Serialize, Deserialize, Clone)]
