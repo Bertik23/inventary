@@ -208,7 +208,7 @@ pub fn category_manager(props: &Props) -> Html {
                     <input
                         type="text"
                         placeholder={ i18n.t("category.name_placeholder") }
-                        class="flex-[2] px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                        class="flex-[2] min-w-0 px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
                         value={ (*new_category_name).clone() }
                         oninput={
                             let name = new_category_name.clone();
@@ -219,7 +219,7 @@ pub fn category_manager(props: &Props) -> Html {
                         }
                     />
                     <select
-                        class="flex-1 px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        class="flex-1 min-w-0 px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                         onchange={
                             let parent = new_category_parent.clone();
                             Callback::from(move |e: Event| {
@@ -236,7 +236,7 @@ pub fn category_manager(props: &Props) -> Html {
                     </select>
                     <button
                         type="submit"
-                        class="w-full md:w-auto px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
+                        class="w-full md:w-auto flex-shrink-0 px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
                     >
                         { i18n.t("category.add") }
                     </button>
