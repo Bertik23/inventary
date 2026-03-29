@@ -244,24 +244,24 @@ pub fn inventory_selection(_props: &Props) -> Html {
                             };
 
                             html! {
-                                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 transition flex justify-between items-center">
-                                    <div class="flex flex-col">
-                                        <span class="font-medium text-gray-800">{&inv.name}</span>
+                                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 transition flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                                    <div class="flex flex-col min-w-0">
+                                        <span class="font-medium text-gray-800 truncate" title={inv.name.clone()}>{&inv.name}</span>
                                         <span class="text-xs text-gray-500 uppercase">{&inv.category_language}</span>
                                     </div>
-                                    <div class="flex gap-2">
-                                        <button onclick={on_categories} class="px-2 py-1 bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200" title={i18n.t("Categories")}>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button onclick={on_categories} class="p-2 sm:px-2 sm:py-1 bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200" title={i18n.t("Categories")}>
                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                                 <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" />
                                             </svg>
                                         </button>
-                                        <button onclick={on_edit} class="px-2 py-1 bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200" title={i18n.t("common.edit")}>
+                                        <button onclick={on_edit} class="p-2 sm:px-2 sm:py-1 bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200" title={i18n.t("common.edit")}>
                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                                 <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                                             </svg>
                                         </button>
-                                        <button onclick={on_share} class="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">{i18n.t("inventory.share")}</button>
-                                        <button onclick={on_select} class="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700">{i18n.t("inventory.switch")}</button>
+                                        <button onclick={on_share} class="flex-1 sm:flex-none px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm">{i18n.t("inventory.share")}</button>
+                                        <button onclick={on_select} class="flex-1 sm:flex-none px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium">{i18n.t("inventory.switch")}</button>
                                     </div>
                                 </div>
                             }
@@ -311,11 +311,11 @@ pub fn inventory_selection(_props: &Props) -> Html {
                                         </select>
                                     </div>
                                 </div>
-                                <div class="flex gap-2 mt-4">
-                                    <button type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">{i18n.t("common.save")}</button>
+                                <div class="flex flex-col sm:flex-row gap-2 mt-4">
+                                    <button type="submit" class="w-full sm:flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">{i18n.t("common.save")}</button>
                                     <button
                                         type="button"
-                                        class="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg hover:bg-gray-200 transition"
+                                        class="w-full sm:flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg hover:bg-gray-200 transition"
                                         onclick={Callback::from(move |_| editing_inv.set(None))}
                                     >
                                         {i18n.t("common.cancel")}
@@ -355,11 +355,11 @@ pub fn inventory_selection(_props: &Props) -> Html {
                                         </select>
                                     </div>
                                 </div>
-                                <div class="flex gap-2 mt-4">
-                                    <button type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">{i18n.t("inventory.create_button")}</button>
+                                <div class="flex flex-col sm:flex-row gap-2 mt-4">
+                                    <button type="submit" class="w-full sm:flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">{i18n.t("inventory.create_button")}</button>
                                     <button
                                         type="button"
-                                        class="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg hover:bg-gray-200 transition"
+                                        class="w-full sm:flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg hover:bg-gray-200 transition"
                                         onclick={Callback::from(move |_| show_create.set(false))}
                                     >
                                         {i18n.t("common.cancel")}

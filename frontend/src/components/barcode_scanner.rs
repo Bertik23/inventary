@@ -428,7 +428,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
 
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6">
                 <h2 class="text-lg font-semibold mb-3 text-gray-700">{i18n.t("barcode.enter_barcode")}</h2>
-                <div class="flex gap-2">
+                <div class="flex flex-col sm:flex-row gap-2">
                     <input
                         type="text"
                         class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition bg-gray-50"
@@ -444,7 +444,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
                         onkeypress={on_barcode_input_keypress}
                     />
                     <button
-                        class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm"
+                        class="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm"
                         onclick={let barcode_input = barcode_input.clone(); let lookup = lookup_by_barcode.clone(); move |_| lookup.emit((*barcode_input).clone())}
                         disabled={*loading}
                     >
@@ -471,7 +471,8 @@ pub fn barcode_scanner(props: &Props) -> Html {
                                         categories: vec![],
                                         unit: Some(template_clone.default_unit.clone()),
                                     }))}
-                                    class="px-4 py-2 bg-blue-50 text-blue-700 rounded-full border border-blue-100 hover:bg-blue-100 transition font-medium text-sm"
+                                    class="px-3 sm:px-4 py-2 bg-blue-50 text-blue-700 rounded-full border border-blue-100 hover:bg-blue-100 transition font-medium text-xs sm:text-sm whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] sm:max-w-none"
+                                    title={template.name.clone()}
                                 >
                                     {&template.name}
                                 </button>
@@ -483,7 +484,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
 
             <div class="mb-6">
                 <h2 class="text-lg font-semibold mb-3 text-gray-700">{i18n.t("barcode.search_by_name")}</h2>
-                <div class="flex gap-2 mb-4">
+                <div class="flex flex-col sm:flex-row gap-2 mb-4">
                     <input
                         type="text"
                         class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition bg-white shadow-sm"
@@ -499,7 +500,7 @@ pub fn barcode_scanner(props: &Props) -> Html {
                         onkeypress={let on_search = on_search.clone(); move |e: KeyboardEvent| if e.key() == "Enter" { on_search.emit(()); }}
                     />
                     <button
-                        class="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium shadow-sm"
+                        class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium shadow-sm"
                         onclick={let on_search = on_search.clone(); move |_| on_search.emit(())}
                         disabled={*loading}
                     >
