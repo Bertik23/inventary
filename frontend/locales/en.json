@@ -86,7 +86,8 @@
         "edit_item": "Edit Item",
         "edit_title": "Edit Inventory",
         "name_label": "Inventory Name",
-        "category_language": "Category Language (OpenFoodFacts)"
+        "category_language": "Category Language (OpenFoodFacts)",
+        "show_out_of_stock": "Show out of stock"
     },
     "category": {
         "title": "Categories",

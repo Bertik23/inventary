@@ -25,6 +25,7 @@ pub fn inventory_list(_props: &Props) -> Html {
     // Filter state
     let selected_category_id = use_state(|| None::<String>);
     let filter_expanded = use_state(|| false);
+    let show_out_of_stock = use_state(|| false);
 
     // Editor state
     let editing_item = use_state(|| None::<InventoryItem>);
@@ -104,14 +105,22 @@ pub fn inventory_list(_props: &Props) -> Html {
     // Filter items based on selected category (including descendants)
     let filtered_items: Vec<_> = items
         .iter()
-        .filter(|item| match &*selected_category_id {
-            None => true, // All items
-            Some(selected_id) if selected_id == "uncategorized" => {
-                item.category_ids.is_empty()
+        .filter(|item| {
+            // Out of stock filter
+            if !*show_out_of_stock && item.quantity <= 0.0 {
+                return false;
             }
-            Some(selected_id) => {
-                let allowed_ids = get_all_descendants(selected_id, &categories);
-                item.category_ids.iter().any(|id| allowed_ids.contains(id))
+
+            match &*selected_category_id {
+                None => true, // All items
+                Some(selected_id) if selected_id == "uncategorized" => {
+                    item.category_ids.is_empty()
+                }
+                Some(selected_id) => {
+                    let allowed_ids =
+                        get_all_descendants(selected_id, &categories);
+                    item.category_ids.iter().any(|id| allowed_ids.contains(id))
+                }
             }
         })
         .collect();
@@ -162,14 +171,19 @@ pub fn inventory_list(_props: &Props) -> Html {
                 })
             };
 
+            let is_out_of_stock = item.quantity <= 0.0;
+
             html! {
                 <div
                     onclick={on_edit(item_clone.clone())}
-                    class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-2 hover:shadow-md transition group cursor-pointer"
+                    class={classes!(
+                        "bg-white", "p-4", "rounded-xl", "shadow-sm", "border", "flex", "flex-col", "gap-2", "hover:shadow-md", "transition", "group", "cursor-pointer",
+                        if is_out_of_stock { "opacity-60 border-gray-200 bg-gray-50/30" } else { "border-gray-100" }
+                    )}
                 >
                     <div class="flex justify-between items-start">
                         <div class="flex flex-col gap-1 min-w-0">
-                            <h3 class="font-semibold text-gray-900 truncate">{&item.name}</h3>
+                            <h3 class={classes!("font-semibold", "truncate", if is_out_of_stock { "text-gray-500" } else { "text-gray-900" })}>{&item.name}</h3>
                             {if let Some(ref barcode) = item.barcode {
                                 html! { <span class="font-mono text-[10px] text-gray-400">{barcode}</span> }
                             } else {
@@ -177,19 +191,24 @@ pub fn inventory_list(_props: &Props) -> Html {
                             }}
                         </div>
                         <div class="flex flex-col items-end gap-2">
-                            <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded-full whitespace-nowrap">
+                            <span class={classes!(
+                                "px-2", "py-1", "text-xs", "font-bold", "rounded-full", "whitespace-nowrap",
+                                if is_out_of_stock { "bg-gray-200 text-gray-600" } else { "bg-blue-100 text-blue-800" }
+                            )}>
                                 {i18n.t_with("inventory.qty", vec![("qty", &format_quantity(item.quantity.into())), ("unit", &item.unit)])}
                             </span>
                             <div class="flex gap-1">
-                                <button
-                                    onclick={on_quick_remove}
-                                    class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                    title={i18n.t("common.remove_one")}
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fill-rule="evenodd" d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
-                                    </svg>
-                                </button>
+                                if !is_out_of_stock {
+                                    <button
+                                        onclick={on_quick_remove}
+                                        class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        title={i18n.t("common.remove_one")}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+                                        </svg>
+                                    </button>
+                                }
                                 <button
                                     class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                     title={i18n.t("common.edit")}
@@ -318,30 +337,48 @@ pub fn inventory_list(_props: &Props) -> Html {
                 <>
                     // Category Filter UI
                     <div class="mb-6 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                        <button
-                            onclick={let filter_expanded = filter_expanded.clone(); move |_| filter_expanded.set(!*filter_expanded)}
-                            class="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-50 transition-colors"
-                        >
-                            <div class="flex items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clip-rule="evenodd" />
-                                </svg>
-                                <span class="font-medium text-gray-700">
-                                    if let Some(id) = &*selected_category_id {
-                                        if id == "uncategorized" {
-                                            { i18n.t("inventory.uncategorized") }
+                        <div class="flex flex-col">
+                            <button
+                                onclick={let filter_expanded = filter_expanded.clone(); move |_| filter_expanded.set(!*filter_expanded)}
+                                class="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-50 transition-colors"
+                            >
+                                <div class="flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span class="font-medium text-gray-700">
+                                        if let Some(id) = &*selected_category_id {
+                                            if id == "uncategorized" {
+                                                { i18n.t("inventory.uncategorized") }
+                                            } else {
+                                                { cat_map.get(id).map(|c| c.name.as_str()).unwrap_or("") }
+                                            }
                                         } else {
-                                            { cat_map.get(id).map(|c| c.name.as_str()).unwrap_or("") }
+                                            { i18n.t("category.all_items") }
                                         }
-                                    } else {
-                                        { i18n.t("category.all_items") }
-                                    }
-                                </span>
+                                    </span>
+                                </div>
+                                <svg xmlns="http://www.w3.org/2000/svg" class={classes!("h-5", "w-5", "text-gray-400", "transition-transform", if *filter_expanded { "rotate-180" } else { "" })} viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+
+                            <div class="px-4 py-2 bg-gray-50/50 border-t border-gray-50 flex items-center justify-between">
+                                <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">{ i18n.t("inventory.show_out_of_stock") }</span>
+                                <button
+                                    onclick={let show_out_of_stock = show_out_of_stock.clone(); move |_| show_out_of_stock.set(!*show_out_of_stock)}
+                                    class={classes!(
+                                        "relative", "inline-flex", "h-5", "w-9", "flex-shrink-0", "cursor-pointer", "rounded-full", "border-2", "border-transparent", "transition-colors", "duration-200", "ease-in-out", "focus:outline-none",
+                                        if *show_out_of_stock { "bg-blue-600" } else { "bg-gray-200" }
+                                    )}
+                                >
+                                    <span class={classes!(
+                                        "pointer-events-none", "inline-block", "h-4", "w-4", "transform", "rounded-full", "bg-white", "shadow", "ring-0", "transition", "duration-200", "ease-in-out",
+                                        if *show_out_of_stock { "translate-x-4" } else { "translate-x-0" }
+                                    )} />
+                                </button>
                             </div>
-                            <svg xmlns="http://www.w3.org/2000/svg" class={classes!("h-5", "w-5", "text-gray-400", "transition-transform", if *filter_expanded { "rotate-180" } else { "" })} viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                            </svg>
-                        </button>
+                        </div>
 
                         if *filter_expanded {
                             <div class="px-2 pb-4 pt-1 border-t border-gray-50 max-h-80 overflow-y-auto animate-fade-in">

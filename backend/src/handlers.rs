@@ -382,25 +382,36 @@ pub async fn remove_item(
     let remove_quantity = req.quantity.unwrap_or(1.0);
 
     if item.quantity <= remove_quantity {
-        // Remove item completely
-        diesel::delete(inventory_items::table.find(&item.id))
+        // Just set quantity to 0.0 to preserve categories and settings
+        use crate::schema::inventory_items::dsl::{quantity, updated_at};
+        diesel::update(inventory_items::table.find(&item.id))
+            .set((quantity.eq(0.0), updated_at.eq(Utc::now().naive_utc())))
             .execute(&mut conn)
             .map_err(|e| {
-                eprintln!("Error deleting item: {:?}", e);
+                eprintln!("Error updating item to 0: {:?}", e);
                 actix_web::error::ErrorInternalServerError("Database error")
             })?;
+
+        let ids = {
+            use crate::schema::item_categories::dsl::*;
+            item_categories
+                .filter(item_id.eq(&item.id))
+                .select(category_id)
+                .load::<String>(&mut conn)
+                .unwrap_or_default()
+        };
 
         Ok(HttpResponse::Ok().json(InventoryItemResponse {
             id: item.id,
             inventory_id: item.inventory_id,
             barcode: item.barcode,
             name: item.name,
-            quantity: 0.0, // It's removed
+            quantity: 0.0,
             unit: item.unit,
             product_data: item.product_data,
             created_at: item.created_at,
-            updated_at: item.updated_at,
-            category_ids: vec![],
+            updated_at: Utc::now().naive_utc(),
+            category_ids: ids,
         }))
     } else {
         // Decrease quantity
