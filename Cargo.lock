@@ -1700,7 +1700,7 @@ dependencies = [
 
 [[package]]
 name = "inventary-backend"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix-cors",
  "actix-files",
@@ -1725,7 +1725,7 @@ dependencies = [
 
 [[package]]
 name = "inventary-frontend"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "console_error_panic_hook",
  "gloo-storage 0.2.2",
