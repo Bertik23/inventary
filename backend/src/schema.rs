@@ -36,6 +36,7 @@ diesel::table! {
         inventory_id -> Text,
         name -> Text,
         parent_id -> Nullable<Text>,
+        external_name -> Nullable<Text>,
     }
 }
 

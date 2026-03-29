@@ -18,6 +18,8 @@ pub fn category_manager(props: &Props) -> Html {
     let error = use_state(|| None::<String>);
     let new_category_name = use_state(|| String::new());
     let new_category_parent = use_state(|| None::<String>);
+    let editing_id = use_state(|| None::<String>);
+    let editing_name = use_state(|| String::new());
 
     let load_categories = {
         let categories = categories.clone();
@@ -99,6 +101,44 @@ pub fn category_manager(props: &Props) -> Html {
                 });
             })
         }
+    };
+
+    let on_save_rename = {
+        let inventory_id = props.inventory_id.clone();
+        let load_categories = load_categories.clone();
+        let error = error.clone();
+        let editing_id = editing_id.clone();
+        let editing_name = editing_name.clone();
+
+        Callback::from(move |_| {
+            let inventory_id = inventory_id.clone();
+            let load_categories = load_categories.clone();
+            let error = error.clone();
+            let editing_id = editing_id.clone();
+            let editing_name = editing_name.clone();
+
+            let cat_id = match &*editing_id {
+                Some(id) => id.clone(),
+                None => return,
+            };
+            let name = (*editing_name).clone();
+
+            wasm_bindgen_futures::spawn_local(async move {
+                let req = UpdateCategoryRequest {
+                    name: Some(name),
+                    parent_id: None,
+                };
+                match update_inventory_category(&inventory_id, &cat_id, req)
+                    .await
+                {
+                    Ok(_) => {
+                        editing_id.set(None);
+                        load_categories.emit(());
+                    }
+                    Err(e) => error.set(Some(e)),
+                }
+            });
+        })
     };
 
     let on_update_parent = {
@@ -215,9 +255,28 @@ pub fn category_manager(props: &Props) -> Html {
                     <tbody class="divide-y divide-gray-50">
                         { for categories.iter().map(|cat| {
                             let cat_id = cat.id.clone();
+                            let is_editing = *editing_id == Some(cat.id.clone());
+
                             html! {
                                 <tr key={cat.id.clone()} class="hover:bg-gray-50 transition-colors">
-                                    <td class="p-4 text-gray-900 font-medium">{ &cat.name }</td>
+                                    <td class="p-4 text-gray-900 font-medium">
+                                        if is_editing {
+                                            <input
+                                                type="text"
+                                                class="w-full px-2 py-1 border border-blue-300 rounded outline-none focus:ring-2 focus:ring-blue-500"
+                                                value={ (*editing_name).clone() }
+                                                oninput={
+                                                    let editing_name = editing_name.clone();
+                                                    Callback::from(move |e: InputEvent| {
+                                                        let input: web_sys::HtmlInputElement = e.target_unchecked_into();
+                                                        editing_name.set(input.value());
+                                                    })
+                                                }
+                                            />
+                                        } else {
+                                            { &cat.name }
+                                        }
+                                    </td>
                                     <td class="p-4">
                                         <select
                                             class="text-sm px-2 py-1 border border-gray-200 rounded outline-none focus:ring-2 focus:ring-blue-500 bg-transparent"
@@ -233,12 +292,48 @@ pub fn category_manager(props: &Props) -> Html {
                                         </select>
                                     </td>
                                     <td class="p-4 text-right">
-                                        <button
-                                            onclick={ on_delete(cat_id) }
-                                            class="px-3 py-1 bg-red-50 text-red-600 rounded-md hover:bg-red-100 transition-colors text-sm font-medium"
-                                        >
-                                            { i18n.t("common.delete") }
-                                        </button>
+                                        if is_editing {
+                                            <div class="flex justify-end gap-2">
+                                                <button
+                                                    onclick={ on_save_rename.clone() }
+                                                    class="px-3 py-1 bg-green-50 text-green-600 rounded-md hover:bg-green-100 transition-colors text-sm font-medium"
+                                                >
+                                                    { i18n.t("common.save") }
+                                                </button>
+                                                <button
+                                                    onclick={
+                                                        let editing_id = editing_id.clone();
+                                                        Callback::from(move |_| editing_id.set(None))
+                                                    }
+                                                    class="px-3 py-1 bg-gray-50 text-gray-600 rounded-md hover:bg-gray-100 transition-colors text-sm font-medium"
+                                                >
+                                                    { i18n.t("common.cancel") }
+                                                </button>
+                                            </div>
+                                        } else {
+                                            <div class="flex justify-end gap-2">
+                                                <button
+                                                    onclick={
+                                                        let editing_id = editing_id.clone();
+                                                        let editing_name = editing_name.clone();
+                                                        let cat = cat.clone();
+                                                        Callback::from(move |_| {
+                                                            editing_id.set(Some(cat.id.clone()));
+                                                            editing_name.set(cat.name.clone());
+                                                        })
+                                                    }
+                                                    class="px-3 py-1 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors text-sm font-medium"
+                                                >
+                                                    { i18n.t("common.edit") }
+                                                </button>
+                                                <button
+                                                    onclick={ on_delete(cat_id) }
+                                                    class="px-3 py-1 bg-red-50 text-red-600 rounded-md hover:bg-red-100 transition-colors text-sm font-medium"
+                                                >
+                                                    { i18n.t("common.delete") }
+                                                </button>
+                                            </div>
+                                        }
                                     </td>
                                 </tr>
                             }

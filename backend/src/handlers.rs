@@ -248,6 +248,7 @@ pub async fn add_item(
                     inventory_id: req.inventory_id.clone(),
                     name: cat_name_or_id.clone(),
                     parent_id: None,
+                    external_name: None,
                 };
                 diesel::insert_into(inventory_categories)
                     .values(&new_cat)
@@ -263,11 +264,15 @@ pub async fn add_item(
         if let Some(ref info) = product_info {
             for cat_name in &info.categories {
                 use crate::schema::inventory_categories::dsl::*;
-                let existing_cat = inventory_categories
-                    .filter(inventory_id.eq(&req.inventory_id))
-                    .filter(name.like(cat_name))
-                    .first::<InventoryCategory>(&mut conn)
-                    .ok();
+                // Match by external_name (to respect renames) OR current name
+                let existing_cat =
+                    inventory_categories
+                        .filter(inventory_id.eq(&req.inventory_id))
+                        .filter(external_name.eq(cat_name).or(
+                            name.like(cat_name).and(external_name.is_null()),
+                        ))
+                        .first::<InventoryCategory>(&mut conn)
+                        .ok();
 
                 if let Some(cat) = existing_cat {
                     category_ids_to_link.push(cat.id);
@@ -277,6 +282,7 @@ pub async fn add_item(
                         inventory_id: req.inventory_id.clone(),
                         name: cat_name.clone(),
                         parent_id: None,
+                        external_name: Some(cat_name.clone()),
                     };
                     if diesel::insert_into(inventory_categories)
                         .values(&new_cat)
@@ -1963,6 +1969,7 @@ pub async fn create_inventory_category(
         inventory_id: inventory_id_param,
         name: req.name.clone(),
         parent_id: req.parent_id.clone(),
+        external_name: None,
     };
 
     diesel::insert_into(crate::schema::inventory_categories::table)

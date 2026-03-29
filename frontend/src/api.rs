@@ -110,6 +110,7 @@ pub struct InventoryCategory {
     pub inventory_id: String,
     pub name: String,
     pub parent_id: Option<String>,
+    pub external_name: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

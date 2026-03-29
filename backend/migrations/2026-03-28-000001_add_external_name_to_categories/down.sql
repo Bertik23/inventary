@@ -1,0 +1,1 @@
+-- No easy way to drop a column in older SQLite
